@@ -13,8 +13,10 @@ from rorven.adapters.model import (
 )
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime import LangGraphAgentRuntime
+from rorven.adapters.tools import LocalWorkspaceToolBroker
 from rorven.application.ports import ModelGateway
 from rorven.application.services import ProjectService, RootService, WorkerService
+from rorven.application.tools import WorkspaceReadPolicy
 from rorven.env import load_local_env
 
 
@@ -50,6 +52,8 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             artifacts=store,
             events=store,
             model_gateway=model_gateway,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
         ),
     )
 

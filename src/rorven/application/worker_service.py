@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import json
 from typing import Sequence
 
 from rorven.application.agent_prompts import (
@@ -16,7 +17,24 @@ from rorven.application.dispatching import (
     parse_orchestrator_decision,
 )
 from rorven.application.modeling import ModelMessage, ModelRequest, ModelResponse
-from rorven.application.ports import ArtifactStore, EventRepository, ModelGateway, RunRepository, TaskQueue
+from rorven.application.ports import (
+    ArtifactStore,
+    EventRepository,
+    ModelGateway,
+    RunRepository,
+    TaskQueue,
+    ToolBroker,
+    ToolPolicy,
+)
+from rorven.application.tools import (
+    DenyAllToolPolicy,
+    ToolExecutionResult,
+    ToolRequest,
+    parse_agent_tool_instruction,
+    tool_decision_to_json,
+    tool_request_to_json,
+    tool_results_prompt,
+)
 from rorven.domain import AgentRun, ArtifactMetadata, Event, EventType, ModelProfile, RunStatus, Task
 
 
@@ -28,12 +46,16 @@ class WorkerService:
         artifacts: ArtifactStore,
         events: EventRepository,
         model_gateway: ModelGateway,
+        tool_policy: ToolPolicy | None = None,
+        tool_broker: ToolBroker | None = None,
     ) -> None:
         self._runs = runs
         self._tasks = tasks
         self._artifacts = artifacts
         self._events = events
         self._model_gateway = model_gateway
+        self._tool_policy = tool_policy or DenyAllToolPolicy()
+        self._tool_broker = tool_broker
 
     def work_once(self, worker_id: str, limit: int = 2) -> Sequence[Task]:
         leased = self._tasks.lease_ready(worker_id, timedelta(seconds=30), limit)
@@ -86,16 +108,148 @@ class WorkerService:
     def _run_agent(self, agent_run: AgentRun) -> str:
         run = self._runs.get_run(agent_run.project_id, agent_run.run_id)
         project = self._runs.get_project(agent_run.project_id)
+        system_message = ModelMessage("system", agent_system_prompt(agent_run.definition.name))
+        task_message = ModelMessage("user", agent_task_prompt(project, run, agent_run, self._assignment(agent_run)))
         request = ModelRequest(
             profile=agent_run.definition.model_profile,
             session_id=f"{agent_run.run_id}:{agent_run.id}",
-            messages=(
-                ModelMessage("system", agent_system_prompt(agent_run.definition.name)),
-                ModelMessage("user", agent_task_prompt(project, run, agent_run, self._assignment(agent_run))),
-            ),
+            messages=(system_message, task_message),
         )
         response = self._model_gateway.complete(request)
-        return _format_model_response(response, response.content)
+        instruction = parse_agent_tool_instruction(response.content)
+        if not instruction.requests_tools:
+            return _format_model_response(response, instruction.final_content or response.content)
+
+        tool_results = self._execute_tool_calls(agent_run, instruction.tool_requests)
+        final_response = self._model_gateway.complete(
+            ModelRequest(
+                profile=agent_run.definition.model_profile,
+                session_id=f"{agent_run.run_id}:{agent_run.id}:after-tools",
+                messages=(
+                    system_message,
+                    task_message,
+                    ModelMessage("assistant", response.content),
+                    ModelMessage("user", tool_results_prompt(tool_results)),
+                ),
+            )
+        )
+        final_instruction = parse_agent_tool_instruction(final_response.content)
+        if final_instruction.requests_tools:
+            raise ValueError("agent requested more than one round of tools")
+        return _format_model_response(final_response, final_instruction.final_content or final_response.content)
+
+    def _execute_tool_calls(
+        self,
+        agent_run: AgentRun,
+        requests: Sequence[ToolRequest],
+    ) -> list[dict[str, object]]:
+        if self._tool_broker is None:
+            raise RuntimeError("no tool broker configured")
+        project = self._runs.get_project(agent_run.project_id)
+        results: list[dict[str, object]] = []
+        for request in requests:
+            self._events_marker(
+                agent_run,
+                EventType.TOOL_REQUESTED,
+                {"tool": request.name, "input": request.input},
+            )
+            decision = self._tool_policy.evaluate(project, agent_run, request)
+            if not decision.allowed:
+                artifact = self._put_tool_artifact(
+                    agent_run,
+                    request,
+                    decision_json=tool_decision_to_json(decision),
+                    result=None,
+                    error=decision.reason,
+                )
+                self._events_marker(
+                    agent_run,
+                    EventType.TOOL_DENIED,
+                    {"tool": request.name, "artifact_id": artifact.id, "reason": decision.reason},
+                )
+                results.append(
+                    {
+                        "tool": request.name,
+                        "allowed": False,
+                        "reason": decision.reason,
+                        "artifact_id": artifact.id,
+                    }
+                )
+                continue
+            try:
+                result = self._tool_broker.execute(project, agent_run, request)
+            except Exception as exc:
+                artifact = self._put_tool_artifact(
+                    agent_run,
+                    request,
+                    decision_json=tool_decision_to_json(decision),
+                    result=None,
+                    error=str(exc),
+                )
+                self._events_marker(
+                    agent_run,
+                    EventType.TOOL_FAILED,
+                    {"tool": request.name, "artifact_id": artifact.id},
+                )
+                results.append(
+                    {
+                        "tool": request.name,
+                        "allowed": True,
+                        "error": str(exc),
+                        "artifact_id": artifact.id,
+                    }
+                )
+                continue
+            artifact = self._put_tool_artifact(
+                agent_run,
+                request,
+                decision_json=tool_decision_to_json(decision),
+                result=result,
+                error=None,
+            )
+            self._events_marker(
+                agent_run,
+                EventType.TOOL_COMPLETED,
+                {"tool": request.name, "artifact_id": artifact.id, **result.metadata},
+            )
+            results.append(
+                {
+                    "tool": request.name,
+                    "allowed": True,
+                    "artifact_id": artifact.id,
+                    "metadata": result.metadata,
+                    "content": result.content,
+                }
+            )
+        return results
+
+    def _put_tool_artifact(
+        self,
+        agent_run: AgentRun,
+        request: ToolRequest,
+        decision_json: dict[str, object],
+        result: ToolExecutionResult | None,
+        error: str | None,
+    ) -> ArtifactMetadata:
+        content = {
+            "request": tool_request_to_json(request),
+            "decision": decision_json,
+            "result": None if result is None else {"content": result.content, "metadata": result.metadata},
+            "error": error,
+        }
+        return self._artifacts.put_text(
+            project_id=agent_run.project_id,
+            run_id=agent_run.run_id,
+            kind="tool.execution",
+            name=f"tool-{agent_run.id}.json",
+            content=json.dumps(content, indent=2, sort_keys=True),
+        )
+
+    def _events_marker(self, agent_run: AgentRun, event_type: EventType, payload: dict[str, object]) -> None:
+        self._runs.update_agent_run(
+            agent_run,
+            [Event.create(agent_run.project_id, event_type, payload, agent_run.run_id)],
+        )
 
     def _dispatch_or_answer_root(self, task: Task, root: AgentRun) -> None:
         response = self._request_orchestrator_decision(root)

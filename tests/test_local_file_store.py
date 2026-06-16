@@ -7,8 +7,10 @@ from uuid import uuid4
 
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime.langgraph import LangGraphAgentRuntime
+from rorven.adapters.tools import LocalWorkspaceToolBroker
 from rorven.application.modeling import ModelRequest, ModelResponse
 from rorven.application.services import ProjectService, WorkerService
+from rorven.application.tools import WorkspaceReadPolicy
 
 
 class TestModelGateway:
@@ -165,6 +167,56 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual({"failed"}, {agent.status.value for agent in failed_state.agent_runs})
         artifact_text = "\n".join(failed_state.artifact_contents.values())
         self.assertIn("orchestrator response was not valid JSON", artifact_text)
+
+    def test_child_agent_uses_brokered_read_only_workspace_tool(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-tools-{uuid4()}"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "README.md").write_text("Workspace fact: adapters stay modular.", encoding="utf-8")
+        store = LocalFilePlatformStore(root / "state")
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"dispatch","subagents":[{"name":"reviewer","task":"Read README and review risks."}]}',
+                (
+                    '{"action":"tool_calls","tool_calls":['
+                    '{"name":"workspace.read_text_file","input":{"path":"README.md","max_bytes":2000}}'
+                    "]} "
+                ),
+                '{"action":"final","content":"Reviewer saw adapters stay modular."}',
+                "Summary includes reviewer workspace findings.",
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
+        )
+
+        project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
+        run_state = projects.submit_task(project.id, "Inspect project posture")
+
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        finished_state = projects.get_run_state(project.id, run_state.run.id)
+        artifact_text = "\n".join(finished_state.artifact_contents.values())
+        event_types = [event.type.value for event in finished_state.events]
+
+        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertIn("Workspace fact: adapters stay modular.", artifact_text)
+        self.assertIn("Reviewer saw adapters stay modular.", artifact_text)
+        self.assertIn("tool.requested", event_types)
+        self.assertIn("tool.completed", event_types)
 
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-order-{uuid4()}"

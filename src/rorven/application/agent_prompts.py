@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from rorven.application.tools import agent_tool_contract
 from rorven.domain import AgentRun, Project, Run
 
 
@@ -37,6 +38,7 @@ def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun, assignmen
         f"Model profile: {agent_run.definition.model_profile.value}\n\n"
         f"User request:\n{run.command}\n\n"
         f"Assigned task:\n{task_text}\n\n"
+        f"{agent_tool_contract()}\n\n"
         "Return useful work product for the project orchestrator. Keep it structured and "
         "specific. If execution tools are required, state exactly what should be run next."
     )

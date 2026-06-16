@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Protocol, Sequence
 
 from rorven.application.modeling import ModelRequest, ModelResponse
+from rorven.application.tools import ToolExecutionResult, ToolPolicyDecision, ToolRequest
 from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
 
 
@@ -104,6 +105,26 @@ class AgentRuntime(Protocol):
 class ModelGateway(Protocol):
     def complete(self, request: ModelRequest) -> ModelResponse:
         """Return one provider-neutral model completion."""
+
+
+class ToolPolicy(Protocol):
+    def evaluate(
+        self,
+        project: Project,
+        agent_run: AgentRun,
+        request: ToolRequest,
+    ) -> ToolPolicyDecision:
+        """Evaluate whether an agent may invoke a brokered tool."""
+
+
+class ToolBroker(Protocol):
+    def execute(
+        self,
+        project: Project,
+        agent_run: AgentRun,
+        request: ToolRequest,
+    ) -> ToolExecutionResult:
+        """Execute a policy-approved brokered tool call."""
 
 
 class RootDashboardRepository(Protocol):

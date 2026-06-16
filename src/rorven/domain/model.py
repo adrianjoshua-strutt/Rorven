@@ -63,6 +63,10 @@ class EventType(StrEnum):
     TASK_COMPLETED = "task.completed"
     ARTIFACT_CREATED = "artifact.created"
     AGENT_DISPATCHED = "agent.dispatched"
+    TOOL_REQUESTED = "tool.requested"
+    TOOL_DENIED = "tool.denied"
+    TOOL_COMPLETED = "tool.completed"
+    TOOL_FAILED = "tool.failed"
 
 
 @dataclass(frozen=True, slots=True)
