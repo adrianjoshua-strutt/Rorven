@@ -52,11 +52,15 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             "planned_system_of_record": "postgresql",
             "data_dir": str(data_dir),
         },
-        "frontend": {
-            "framework": "React + Vite",
-            "design_system": "custom CSS tokens",
-            "icon_system": "lucide-react",
-            "needs_design_system_migration": True,
+        "policy": {
+            "destructive_actions": "approval-required",
+            "secret_exposure": "presence-only",
+            "default_tool_access": "deny",
+        },
+        "project_defaults": {
+            "workspace_root_source": "user-selected",
+            "memory_backend": "deferred",
+            "sandbox": "deferred",
         },
     }
 

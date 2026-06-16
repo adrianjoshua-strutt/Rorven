@@ -83,11 +83,15 @@ export type SettingsSnapshot = {
     planned_system_of_record: string;
     data_dir: string;
   };
-  frontend: {
-    framework: string;
-    design_system: string;
-    icon_system: string;
-    needs_design_system_migration: boolean;
+  policy: {
+    destructive_actions: string;
+    secret_exposure: string;
+    default_tool_access: string;
+  };
+  project_defaults: {
+    workspace_root_source: string;
+    memory_backend: string;
+    sandbox: string;
   };
 };
 

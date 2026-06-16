@@ -181,7 +181,7 @@ textarea {
 }
 
 textarea {
-  resize: vertical;
+  resize: none;
 }
 
 input:focus,
@@ -257,6 +257,12 @@ button:focus-visible {
   background: #0f1214;
 }
 
+.chat-pane > .root-view,
+.chat-pane > .settings-view,
+.chat-pane > .agent-work-view {
+  grid-row: 1 / -1;
+}
+
 .chat-header {
   min-height: 70px;
   display: flex;
@@ -319,6 +325,8 @@ button:focus-visible {
 }
 
 .message-list {
+  min-height: 0;
+  height: 100%;
   padding: 18px 22px;
   display: flex;
   flex-direction: column;
@@ -379,16 +387,25 @@ button:focus-visible {
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 86px;
+  align-items: stretch;
   gap: 10px;
+  min-height: 67px;
+  max-height: 67px;
   padding: 12px 18px;
   border-top: 1px solid var(--line);
   background: var(--pane);
 }
 
 .composer textarea {
+  height: 42px;
   min-height: 42px;
-  max-height: 120px;
+  max-height: 42px;
   line-height: 1.35;
+  overflow-y: auto;
+}
+
+.composer .send-button {
+  height: 42px;
 }
 
 .empty-chat {
@@ -407,7 +424,7 @@ button:focus-visible {
 
 .root-view {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
 }
 
@@ -491,122 +508,26 @@ button:focus-visible {
   font-size: 0.78rem;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.settings-grid.two-columns {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .settings-tile {
   min-width: 0;
-  border: 1px solid var(--line);
   background: var(--pane-3);
   padding: 12px;
 }
 
-.settings-tile div,
-.profile-row {
-  display: grid;
-  align-items: center;
-}
-
-.settings-tile div {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.settings-tile strong,
-.settings-tile span,
-.settings-tile p,
-.profile-row span,
-.profile-row strong {
-  min-width: 0;
-}
-
-.settings-tile > span {
+.settings-tile-value {
   display: block;
   margin-top: 9px;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
-.settings-tile p {
-  margin: 9px 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
 .profile-table {
-  border: 1px solid var(--line);
   background: var(--pane-3);
-}
-
-.profile-row {
-  grid-template-columns: 0.8fr 1fr minmax(170px, 1.4fr) 0.7fr auto;
-  gap: 12px;
-  min-height: 46px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--line);
-}
-
-.profile-row:first-child {
-  border-top: 0;
-}
-
-.profile-row.header {
-  min-height: 34px;
-  color: var(--muted);
-  font-size: 0.74rem;
-  text-transform: uppercase;
-}
-
-.profile-row span,
-.profile-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.muted-value {
-  color: var(--faint);
 }
 
 .settings-empty {
   padding: 14px;
   color: var(--muted);
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 21px;
-  width: max-content;
-  border: 1px solid var(--line);
-  padding: 0 7px;
-  color: var(--muted);
-  font-size: 0.68rem;
-  text-transform: uppercase;
-}
-
-.status-badge.configured {
-  color: var(--teal);
-  border-color: rgba(55, 192, 162, 0.45);
-}
-
-.status-badge.missing {
-  color: var(--red);
-  border-color: rgba(223, 107, 98, 0.45);
-}
-
-.status-badge.deferred {
-  color: var(--amber);
-  border-color: rgba(213, 162, 66, 0.45);
 }
 
 .subagents-header {
@@ -671,42 +592,6 @@ button:focus-visible {
   text-align: center;
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  width: max-content;
-  min-height: 22px;
-  border: 1px solid var(--line);
-  padding: 0 7px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-}
-
-.status-pill.completed {
-  color: var(--teal);
-  border-color: rgba(55, 192, 162, 0.45);
-}
-
-.status-pill.started,
-.status-pill.leased {
-  color: var(--blue);
-  border-color: rgba(123, 166, 255, 0.45);
-}
-
-.status-pill.waiting,
-.status-pill.queued,
-.status-pill.ready,
-.status-pill.created {
-  color: var(--amber);
-  border-color: rgba(213, 162, 66, 0.45);
-}
-
-.status-pill.failed {
-  color: var(--red);
-  border-color: rgba(223, 107, 98, 0.45);
-}
-
 .agent-work-view {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -731,8 +616,7 @@ button:focus-visible {
   font-size: 0.78rem;
 }
 
-.agent-work-header h1,
-.modal-header h2 {
+.agent-work-header h1 {
   margin: 0;
 }
 
@@ -796,39 +680,9 @@ button:focus-visible {
   background: var(--pane);
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.52);
-  z-index: 20;
-}
-
-.modal {
-  width: min(520px, calc(100vw - 32px));
-  border: 1px solid var(--line-strong);
-  background: var(--pane);
-  padding: 16px;
-  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.45);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
 @media (max-width: 1120px) {
   .app-shell {
     grid-template-columns: 260px minmax(0, 1fr);
-  }
-
-  .settings-grid,
-  .settings-grid.two-columns {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .subagents-pane {
@@ -868,8 +722,6 @@ button:focus-visible {
 
   .agent-work-meta,
   .agent-interrupt,
-  .settings-grid,
-  .settings-grid.two-columns,
   .root-content {
     grid-template-columns: 1fr;
   }
