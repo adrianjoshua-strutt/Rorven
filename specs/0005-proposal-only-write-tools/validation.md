@@ -1,6 +1,6 @@
 # Validation
 
-Validated implementation commit: `008a137`
+Validated implementation commit: `41723e4`
 
 ## Evidence
 
@@ -9,7 +9,7 @@ $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 32 tests passed.
+Result: 34 tests passed.
 
 ```powershell
 cd apps/web
@@ -20,8 +20,6 @@ Result: build passed.
 
 ## Remaining Limitations
 
-- Proposal-only text-file write tools were implemented later in `0005-proposal-only-write-tools`; applied writes are still absent.
+- Proposed diffs cannot be approved or applied yet.
+- No sandbox isolation for mutable actions exists yet.
 - No shell, git, browser, network, or external service tools.
-- No sandbox isolation around local reads.
-- No human approval flow.
-- No secret broker integration.

@@ -66,14 +66,16 @@ The first implemented tool slice is local read-only workspace inspection:
 - `ToolBroker` is the application-owned port for tool execution.
 - `ToolPolicy` is the application-owned port for authorization decisions.
 - Product composition wires `WorkspaceReadPolicy` and `LocalWorkspaceToolBroker`.
-- Child agents may request one round of `workspace.list_files` or
-  `workspace.read_text_file`.
+- Child agents may request one round of `workspace.list_files`,
+  `workspace.read_text_file`, or `workspace.propose_text_file_write`.
 - Root orchestrators may not invoke workspace tools directly.
 - Sensitive-looking paths such as `.env`, `.git`, key, token, secret, or
   credential files are denied before execution.
+- Text-file write proposals return persisted unified diffs and do not modify the
+  workspace.
 - Tool requests, denials, completions, failures, and output artifacts are persisted
   for run inspection.
-- No write, shell, git, browser, network, or secret-bearing tools exist yet.
+- No apply-write, shell, git, browser, network, or secret-bearing tools exist yet.
 
 ## Redaction
 

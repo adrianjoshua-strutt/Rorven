@@ -1,4 +1,4 @@
-# ADR 0014-tool-broker-read-only-workspace: Add brokered read-only workspace tools
+# ADR 0014-tool-broker-read-only-workspace: Add brokered workspace tools
 
 Status: Proposed  
 Date: 2026-06-16
@@ -17,26 +17,28 @@ Add two application-owned ports:
 - `ToolPolicy` evaluates whether an agent may invoke a requested capability.
 - `ToolBroker` executes policy-approved tool calls.
 
-The first adapter is `LocalWorkspaceToolBroker`, which supports read-only local
-workspace inspection through:
+The first adapter is `LocalWorkspaceToolBroker`, which supports local workspace
+inspection and proposal-only text writes through:
 
 - `workspace.list_files`
 - `workspace.read_text_file`
+- `workspace.propose_text_file_write`
 
 Product composition wires `WorkspaceReadPolicy` and `LocalWorkspaceToolBroker`.
 The policy denies by default, allows only child agents, blocks unsupported tools,
-caps output sizes, and denies obvious secret paths.
+caps output sizes, and denies obvious secret paths. Write proposals are represented
+as unified diffs and are not applied to the workspace.
 
 ## Consequences
 
-Agents can inspect ordinary project files through auditable artifacts and events
-without receiving ambient machine access. This is still not sandbox isolation and
-does not permit edits, shell commands, git actions, network access, or secret
-retrieval.
+Agents can inspect ordinary project files and propose text-file changes through
+auditable artifacts and events without receiving ambient machine access. This is
+still not sandbox isolation and does not permit applied edits, shell commands, git
+actions, network access, or secret retrieval.
 
 ## Enforcement
 
 Backend tests cover policy denial, path escape prevention, brokered file reads,
-and a worker run where a child agent requests a tool before producing final work.
-Architecture boundary tests continue to prevent provider/framework imports in
-domain and application layers.
+proposal-only text diffs that leave files unchanged, and worker runs where child
+agents request tools before producing final work. Architecture boundary tests
+continue to prevent provider/framework imports in domain and application layers.

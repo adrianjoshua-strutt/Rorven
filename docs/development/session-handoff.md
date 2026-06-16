@@ -4,7 +4,7 @@ This note is operational context for the next agent. It does not override the co
 
 ## Current Direction
 
-The old `specs/0001-foundation` dossier was removed because it encouraged synthetic behavior. The active dossier is now `specs/0004-read-only-workspace-tools`.
+The old `specs/0001-foundation` dossier was removed because it encouraged synthetic behavior. The active dossier is now `specs/0005-proposal-only-write-tools`.
 
 The product should keep the adapter-based architecture, but product composition must not use local deterministic model/runtime shims to make a demo look alive.
 
@@ -22,12 +22,13 @@ The product should keep the adapter-based architecture, but product composition 
 - Child agents can request one brokered round of read-only workspace tools.
 - `WorkspaceReadPolicy` denies root-agent tool use, unsupported tools, oversized requests, and obvious secret paths.
 - `LocalWorkspaceToolBroker` confines paths to the project workspace and supports `workspace.list_files` and `workspace.read_text_file`.
+- `LocalWorkspaceToolBroker` also supports `workspace.propose_text_file_write`, which returns a persisted unified diff without changing the workspace file.
 - Tool requests, denials, completions, failures, and outputs are persisted as events/artifacts.
 - Tests were rewritten so project runs expect one real root orchestrator task, not fabricated reviewer/implementer subagents.
 - Root dashboard activity remains empty unless real root activities are persisted.
 - Architecture docs and `.project/state.yaml` now describe the real limits.
 
-Latest implementation commit: `008a137`.
+Latest implementation commit: `41723e4`.
 
 ## Validation
 
@@ -36,7 +37,7 @@ $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 32 tests passed.
+Result: 34 tests passed.
 
 ```powershell
 cd apps/web
@@ -48,14 +49,14 @@ Result: build passed.
 ## Still Not Done
 
 - No versioned external agent-definition store yet; reviewer/implementer definitions are application constants.
-- No write/edit, shell, git, browser, network, approval, or sandbox tools.
+- No apply-write/edit, shell, git, browser, network, approval, or sandbox tools.
 - No Postgres repository implementation.
 - No project memory implementation.
 - The root project can call the model gateway, but cannot yet autonomously create projects through brokered project-management tools.
 
 ## Next Best Slice
 
-Implement safe write/edit tools:
+Implement approved write/apply tools:
 
 1. Add explicit approval and policy records for mutable actions.
 2. Add a sandbox-backed file-edit proposal/apply flow.

@@ -26,14 +26,16 @@
 ## Current tool surface
 
 The current product surface exposes only brokered read-only workspace inspection
-for child agents:
+and proposal-only text writes for child agents:
 
 - `workspace.list_files`
 - `workspace.read_text_file`
+- `workspace.propose_text_file_write`
 
 The local adapter confines paths to the project workspace root, skips common heavy
-directories, blocks obvious secret paths, and caps file and listing output. This is
-not a sandbox boundary and does not authorize writes or shell execution.
+directories, blocks obvious secret paths, caps file and listing output, and returns
+unified diffs for proposed text writes without applying them. This is not a sandbox
+boundary and does not authorize applied writes or shell execution.
 
 ## Threats to test
 

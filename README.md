@@ -17,7 +17,7 @@ This repository contains the product and architecture foundation plus the first 
 7. `docs/product/identity.md`
 8. `docs/architecture/README.md`
 9. `docs/architecture/evolution-and-migrations.md`
-10. `specs/0004-read-only-workspace-tools/spec.md`
+10. `specs/0005-proposal-only-write-tools/spec.md`
 
 ## Core idea
 
@@ -57,11 +57,11 @@ provider route the request. Without `RORVEN_OPENROUTER_API_KEY`, the API and wor
 refuse to start the model gateway.
 
 The current worker executes durable project-orchestrator tasks, can dispatch real
-reviewer/implementer subagent tasks, and gives child agents one brokered,
-policy-checked round of read-only workspace inspection. Results, assignments, tool
-calls, and audit events are persisted. This is not yet a code-editing agent:
-write tools, shell, git, sandbox isolation, memory, and approvals are separate
-slices.
+reviewer/implementer subagent tasks, gives child agents one brokered,
+policy-checked tool round, and can persist proposal-only text-file diffs. Results,
+assignments, tool calls, proposed edits, and audit events are persisted. This is
+not yet a code-editing agent: applying edits, shell, git, sandbox isolation,
+memory, and approvals are separate slices.
 
 Local development uses three processes:
 

@@ -10,5 +10,5 @@
 - [x] Deny path traversal and secret-looking paths.
 - [x] Validate backend and frontend.
 - [ ] Add approval records for mutable tools.
-- [ ] Add sandbox-backed file-edit proposal tools.
+- [x] Add sandbox-backed file-edit proposal tools. Superseded by `0005-proposal-only-write-tools` without sandbox isolation.
 - [ ] Add git/diff integration after approvals exist.

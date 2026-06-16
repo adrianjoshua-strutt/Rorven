@@ -5,8 +5,8 @@ project_phase: foundation
 status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
-active_feature: 0004-read-only-workspace-tools
-last_verified_commit: 008a137
+active_feature: 0005-proposal-only-write-tools
+last_verified_commit: 41723e4
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -30,7 +30,7 @@ current_decisions:
   secret_delivery: brokered-tools-first
   tool_abstraction: ToolBroker
   tool_policy_abstraction: ToolPolicy
-  initial_tool_adapter: local-read-only-workspace
+  initial_tool_adapter: local-workspace-inspection-and-proposals
   memory_abstraction: MemoryBackend
   initial_memory_backend: postgres
   sandbox_abstraction: SandboxProvider
@@ -51,7 +51,7 @@ next_required_gates:
   - adr-review-for-first-slice
   - module-map-for-first-slice
   - migration-skeleton-plan
-  - validation-plan-for-read-only-workspace-tools
+  - validation-plan-for-proposal-only-write-tools
   - postgres-repository-slice
   - tool-broker-and-sandbox-slice
 known_issues:
@@ -78,11 +78,13 @@ known_issues:
     remediation: Implement the Postgres repository slice with startup migration
       tests before claiming production persistence.
   - id: I-004
-    title: only read-only workspace tools are brokered
+    title: workspace writes are proposal-only
     description: >
-      Child agents can request one round of policy-checked read-only workspace
-      tools. They still cannot edit files, run shell commands, use git, access the
-      browser, or perform externally visible actions.
+      Child agents can request one round of policy-checked workspace inspection
+      tools and text-file write proposals. Proposed writes are persisted as diffs
+      and are not applied to the workspace. Agents still cannot edit files, run
+      shell commands, use git, access the browser, or perform externally visible
+      actions.
     remediation: Add sandbox-backed write/edit/shell tools only after approval
       policy, audit records, idempotency, and recovery tests exist.
 last_updated: '2026-06-16'

@@ -78,8 +78,8 @@ The settings API must not place raw provider credentials in responses. Agent def
 
 ## Current limitation
 
-The model-backed worker has brokered read-only workspace inspection for child
-agents only. It has no write, shell, git, browser, memory, external network, or
-sandbox tools. Root orchestrators and child subagents produce persisted text
-artifacts; they must not claim they edited files or ran commands until mutable
-tool and sandbox slices exist.
+The model-backed worker has brokered workspace inspection and proposal-only
+text-file write tools for child agents only. It has no apply-write, shell, git,
+browser, memory, external network, or sandbox tools. Root orchestrators and child
+subagents produce persisted text artifacts and diff proposals; they must not claim
+they edited files or ran commands until mutable tool and sandbox slices exist.
