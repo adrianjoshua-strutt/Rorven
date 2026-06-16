@@ -15,10 +15,18 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Sequence
 
-from rorven.application.ports import ArtifactStore, EventRepository, RunRepository, TaskQueue
+from rorven.application.ports import (
+    ApprovalRepository,
+    ArtifactStore,
+    EventRepository,
+    RunRepository,
+    TaskQueue,
+)
 from rorven.domain import (
     AgentDefinitionRef,
     AgentRun,
+    Approval,
+    ApprovalStatus,
     ArtifactMetadata,
     Event,
     EventType,
@@ -38,7 +46,13 @@ MODEL_PROFILE_NAMES = ("utility", "balanced", "reasoning", "frontier")
 MODEL_PROFILE_ENV_PREFIX = "RORVEN_MODEL_PROFILE_"
 
 
-class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, ArtifactStore):
+class LocalFilePlatformStore(
+    RunRepository,
+    EventRepository,
+    TaskQueue,
+    ArtifactStore,
+    ApprovalRepository,
+):
     def __init__(self, root: Path) -> None:
         self._root = root
         self._state_path = root / "state.json"
@@ -364,6 +378,41 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             path = self._root / artifact.uri
             return path.read_text(encoding="utf-8")
 
+    def add_approval(self, approval: Approval, event: Event) -> None:
+        with self._lock:
+            state = self._read_state()
+            state["approvals"][approval.id] = self._approval_to_json(approval)
+            state["events"][event.id] = self._event_to_json(event)
+            self._write_state(state)
+
+    def list_approvals_for_run(self, run_id: str) -> Sequence[Approval]:
+        with self._lock:
+            state = self._read_state()
+            approvals = [
+                self._approval_from_json(item)
+                for item in state["approvals"].values()
+                if item["run_id"] == run_id
+            ]
+            return sorted(approvals, key=lambda item: item.created_at)
+
+    def get_approval(self, approval_id: str) -> Approval:
+        with self._lock:
+            state = self._read_state()
+            try:
+                return self._approval_from_json(state["approvals"][approval_id])
+            except KeyError as exc:
+                raise KeyError(f"approval not found: {approval_id}") from exc
+
+    def update_approval(self, approval: Approval, events: Sequence[Event]) -> None:
+        with self._lock:
+            state = self._read_state()
+            if approval.id not in state["approvals"]:
+                raise KeyError(f"approval not found: {approval.id}")
+            state["approvals"][approval.id] = self._approval_to_json(approval)
+            for event in events:
+                state["events"][event.id] = self._event_to_json(event)
+            self._write_state(state)
+
     def _empty_state(self) -> dict[str, dict[str, Any]]:
         return {
             "projects": {},
@@ -372,6 +421,7 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             "tasks": {},
             "events": {},
             "artifacts": {},
+            "approvals": {},
             "root_messages": [],
             "settings": {
                 "model_profiles": {},
@@ -519,4 +569,28 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             kind=data["kind"],
             uri=data["uri"],
             created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+    def _approval_to_json(self, approval: Approval) -> dict[str, Any]:
+        data = asdict(approval)
+        data["status"] = approval.status.value
+        data["created_at"] = approval.created_at.isoformat()
+        data["decided_at"] = approval.decided_at.isoformat() if approval.decided_at else None
+        return data
+
+    def _approval_from_json(self, data: dict[str, Any]) -> Approval:
+        return Approval(
+            id=data["id"],
+            project_id=data["project_id"],
+            run_id=data["run_id"],
+            agent_run_id=data["agent_run_id"],
+            artifact_id=data["artifact_id"],
+            action=data["action"],
+            status=ApprovalStatus(data["status"]),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            decided_at=datetime.fromisoformat(data["decided_at"])
+            if data.get("decided_at")
+            else None,
+            result_artifact_id=data.get("result_artifact_id"),
+            failure_reason=data.get("failure_reason"),
         )

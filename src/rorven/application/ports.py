@@ -7,7 +7,7 @@ from typing import Protocol, Sequence
 
 from rorven.application.modeling import ModelRequest, ModelResponse
 from rorven.application.tools import ToolExecutionResult, ToolPolicyDecision, ToolRequest
-from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
+from rorven.domain import AgentRun, Approval, ArtifactMetadata, Event, Project, Run, Task
 
 
 class Clock(Protocol):
@@ -95,6 +95,20 @@ class ArtifactStore(Protocol):
 
     def get_text(self, artifact_id: str) -> str:
         """Return artifact text content by ID."""
+
+
+class ApprovalRepository(Protocol):
+    def add_approval(self, approval: Approval, event: Event) -> None:
+        """Persist a pending approval request and its lifecycle event."""
+
+    def list_approvals_for_run(self, run_id: str) -> Sequence[Approval]:
+        """Return approvals attached to a run in creation order."""
+
+    def get_approval(self, approval_id: str) -> Approval:
+        """Return one approval by ID."""
+
+    def update_approval(self, approval: Approval, events: Sequence[Event]) -> None:
+        """Persist an approval decision and lifecycle events atomically."""
 
 
 class AgentRuntime(Protocol):

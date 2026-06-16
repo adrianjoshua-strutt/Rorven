@@ -26,6 +26,9 @@ LangGraph checkpoint tables may exist in the same database but remain adapter-ow
 - Events describing a state transition are written in the same transaction as the state change.
 - Outbound side effects use an outbox or equivalent idempotent dispatch mechanism.
 - Leases use database time and explicit expiration.
+- Mutable workspace proposals produce durable approval records before application.
+- Approval decisions and their lifecycle events are committed with the approval
+  state transition.
 
 ## Data ownership
 

@@ -9,7 +9,7 @@ from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime.langgraph import LangGraphAgentRuntime
 from rorven.adapters.tools import LocalWorkspaceToolBroker
 from rorven.application.modeling import ModelRequest, ModelResponse
-from rorven.application.services import ProjectService, WorkerService
+from rorven.application.services import ApprovalService, ProjectService, WorkerService
 from rorven.application.tools import WorkspaceReadPolicy
 
 
@@ -53,6 +53,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
         worker = WorkerService(
             runs=store,
@@ -60,6 +61,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             events=store,
             model_gateway=TestModelGateway(),
+            approvals=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -73,6 +75,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=reopened,
             runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
+            approvals=reopened,
         )
         reopened_state = reopened_projects.get_run_state(project.id, run_state.run.id)
 
@@ -92,6 +95,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -112,6 +116,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             events=store,
             model_gateway=gateway,
+            approvals=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -148,6 +153,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
         worker = WorkerService(
             runs=store,
@@ -155,6 +161,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             events=store,
             model_gateway=ScriptedModelGateway(["not-json"]),
+            approvals=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -180,6 +187,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -199,6 +207,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             events=store,
             model_gateway=gateway,
+            approvals=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=LocalWorkspaceToolBroker(),
         )
@@ -231,6 +240,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -238,7 +248,7 @@ class LocalFileStoreTests(unittest.TestCase):
                 (
                     '{"action":"tool_calls","tool_calls":['
                     '{"name":"workspace.propose_text_file_write",'
-                    '"input":{"path":"README.md","content":"After\\\\n"}}'
+                    '"input":{"path":"README.md","content":"After\\n"}}'
                     "]} "
                 ),
                 '{"action":"final","content":"Proposed README update; not applied."}',
@@ -251,6 +261,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             events=store,
             model_gateway=gateway,
+            approvals=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=LocalWorkspaceToolBroker(),
         )
@@ -265,10 +276,33 @@ class LocalFileStoreTests(unittest.TestCase):
 
         self.assertEqual("completed", finished_state.run.status.value)
         self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+        self.assertEqual(1, len(finished_state.approvals))
+        self.assertEqual("pending", finished_state.approvals[0].status.value)
         self.assertIn("workspace.propose_text_file_write", artifact_text)
         self.assertIn("--- a/README.md", artifact_text)
         self.assertIn("+After", artifact_text)
         self.assertIn('"applied": false', artifact_text)
+
+        approvals = ApprovalService(
+            runs=store,
+            approvals=store,
+            artifacts=store,
+            tool_broker=LocalWorkspaceToolBroker(),
+        )
+        applied = approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
+        after_approval_state = projects.get_run_state(project.id, run_state.run.id)
+
+        self.assertEqual("applied", applied.status.value)
+        self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+        self.assertEqual("applied", after_approval_state.approvals[0].status.value)
+        self.assertIn(
+            "approval.created",
+            [event.type.value for event in after_approval_state.events],
+        )
+        self.assertIn(
+            "approval.applied",
+            [event.type.value for event in after_approval_state.events],
+        )
 
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-order-{uuid4()}"
@@ -280,6 +314,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
 
         first = projects.create_project("First", "D:/workspaces", "D:/workspaces/first")
@@ -292,6 +327,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=reopened,
             runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
+            approvals=reopened,
         )
 
         self.assertEqual(
@@ -309,6 +345,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
+            approvals=store,
         )
 
         projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -337,6 +374,7 @@ class LocalFileStoreTests(unittest.TestCase):
 
         migrated = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual({}, migrated["artifacts"])
+        self.assertEqual({}, migrated["approvals"])
 
 
 if __name__ == "__main__":

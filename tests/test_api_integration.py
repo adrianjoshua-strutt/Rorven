@@ -89,6 +89,117 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("project result", state_payload["artifacts"][0]["content"])
         self.assertTrue((data_dir / "state.json").exists())
 
+    def test_approval_endpoint_applies_proposed_workspace_write(self) -> None:
+        root = Path("test-output") / "tests" / f"api-approval-{uuid4()}"
+        data_dir = root / "state"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+        module = importlib.import_module("rorven_api.main")
+        app = module.create_app()
+        client = TestClient(app)
+
+        project_response = client.post(
+            "/projects",
+            json={
+                "name": "Approval Example",
+                "allowed_root": str(root.resolve()),
+                "workspace_root": str(workspace.resolve()),
+            },
+        )
+        self.assertEqual(201, project_response.status_code)
+        project_id = project_response.json()["project"]["id"]
+        run_response = client.post(
+            f"/projects/{project_id}/runs",
+            json={"command": "Propose README update"},
+        )
+        self.assertEqual(202, run_response.status_code)
+        run_id = run_response.json()["run"]["id"]
+
+        scripted_responses = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Propose README update."}]}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"action":"tool_calls","tool_calls":['
+                                '{"name":"workspace.propose_text_file_write",'
+                                '"input":{"path":"README.md","content":"After\\n"}}'
+                                "]} "
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"final","content":"Proposed README update."}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Summary includes proposal.",
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+        ]
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            side_effect=scripted_responses,
+        ):
+            self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
+            self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
+
+        approvals_response = client.get(f"/projects/{project_id}/runs/{run_id}/approvals")
+        self.assertEqual(200, approvals_response.status_code)
+        approvals = approvals_response.json()["approvals"]
+        self.assertEqual(1, len(approvals))
+        self.assertEqual("pending", approvals[0]["status"])
+        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+
+        approve_response = client.post(
+            f"/projects/{project_id}/runs/{run_id}/approvals/{approvals[0]['id']}/approve"
+        )
+
+        self.assertEqual(200, approve_response.status_code)
+        self.assertEqual("applied", approve_response.json()["approval"]["status"])
+        self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

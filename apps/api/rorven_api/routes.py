@@ -13,6 +13,7 @@ from rorven_api.schemas import (
     WorkOnceRequest,
 )
 from rorven_api.serializers import (
+    approval_to_api,
     project_state_to_api,
     project_to_api,
     root_state_to_api,
@@ -101,6 +102,34 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {"run": run_state_to_api(state)}
+
+    @app.get("/projects/{project_id}/runs/{run_id}/approvals")
+    def list_approvals(project_id: str, run_id: str) -> dict[str, Any]:
+        try:
+            approvals = services.approvals.list_for_run(project_id, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"approvals": [approval_to_api(approval) for approval in approvals]}
+
+    @app.post("/projects/{project_id}/runs/{run_id}/approvals/{approval_id}/approve")
+    def approve(project_id: str, run_id: str, approval_id: str) -> dict[str, Any]:
+        try:
+            approval = services.approvals.approve(project_id, run_id, approval_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"approval": approval_to_api(approval)}
+
+    @app.post("/projects/{project_id}/runs/{run_id}/approvals/{approval_id}/reject")
+    def reject(project_id: str, run_id: str, approval_id: str) -> dict[str, Any]:
+        try:
+            approval = services.approvals.reject(project_id, run_id, approval_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"approval": approval_to_api(approval)}
 
     @app.post("/worker/work-once")
     def work_once(request: WorkOnceRequest) -> dict[str, Any]:

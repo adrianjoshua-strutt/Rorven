@@ -3,21 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Sequence
 
 from rorven.application.modeling import ModelMessage, ModelRequest
 from rorven.application.ports import (
     AgentRuntime,
+    ApprovalRepository,
     ArtifactStore,
     EventRepository,
     RunRepository,
     RootDashboardRepository,
     TaskQueue,
     ModelGateway,
+    ToolBroker,
 )
+from rorven.application.tools import ToolExecutionResult, ToolRequest
 from rorven.application.worker_service import WorkerService
 from rorven.domain import (
     AgentRun,
+    Approval,
+    ApprovalStatus,
     ArtifactMetadata,
     Event,
     EventType,
@@ -44,6 +50,7 @@ class RunState:
     events: Sequence[Event]
     artifacts: Sequence[ArtifactMetadata]
     artifact_contents: dict[str, str]
+    approvals: Sequence[Approval]
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,12 +77,14 @@ class ProjectService:
         tasks: TaskQueue,
         runtime: AgentRuntime,
         artifacts: ArtifactStore,
+        approvals: ApprovalRepository,
     ) -> None:
         self._runs = runs
         self._events = events
         self._tasks = tasks
         self._runtime = runtime
         self._artifacts = artifacts
+        self._approvals = approvals
 
     def list_projects(self) -> Sequence[Project]:
         return self._runs.list_projects()
@@ -128,6 +137,7 @@ class ProjectService:
             events=self._events.list_project_events(project_id),
             artifacts=artifacts,
             artifact_contents={artifact.id: self._artifacts.get_text(artifact.id) for artifact in artifacts},
+            approvals=self._approvals.list_approvals_for_run(run_id),
         )
 
     def _root_agent_run(self, project_id: str, run_id: str) -> AgentRun:
@@ -143,6 +153,156 @@ class ProjectService:
 
 def _workspace_key(value: str) -> str:
     return value.replace("\\", "/").rstrip("/").lower()
+
+
+def _tool_request_without_content(request: ToolRequest) -> dict[str, object]:
+    sanitized = dict(request.input)
+    if "content" in sanitized:
+        value = sanitized.pop("content")
+        if isinstance(value, str):
+            sanitized["content_bytes"] = len(value.encode("utf-8"))
+        else:
+            sanitized["content_present"] = True
+    return {"name": request.name, "input": sanitized}
+
+
+class ApprovalService:
+    def __init__(
+        self,
+        runs: RunRepository,
+        approvals: ApprovalRepository,
+        artifacts: ArtifactStore,
+        tool_broker: ToolBroker,
+    ) -> None:
+        self._runs = runs
+        self._approvals = approvals
+        self._artifacts = artifacts
+        self._tool_broker = tool_broker
+
+    def list_for_run(self, project_id: str, run_id: str) -> Sequence[Approval]:
+        self._runs.get_run(project_id, run_id)
+        return self._approvals.list_approvals_for_run(run_id)
+
+    def approve(self, project_id: str, run_id: str, approval_id: str) -> Approval:
+        approval = self._scoped_approval(project_id, run_id, approval_id)
+        if approval.status == ApprovalStatus.APPLIED:
+            return approval
+        if approval.status == ApprovalStatus.REJECTED:
+            raise ValueError("rejected approvals cannot be applied")
+        if approval.status == ApprovalStatus.FAILED:
+            raise ValueError("failed approvals require a new proposal")
+
+        try:
+            request = self._apply_request_from_proposal(approval)
+            agent_run = self._runs.get_agent_run(approval.agent_run_id)
+            project = self._runs.get_project(approval.project_id)
+            result = self._tool_broker.execute(project, agent_run, request)
+            result_artifact = self._put_apply_artifact(approval, request, result, error=None)
+            applied = approval.apply(result_artifact.id)
+            self._approvals.update_approval(
+                applied,
+                [
+                    Event.create(
+                        approval.project_id,
+                        EventType.APPROVAL_APPLIED,
+                        {
+                            "approval_id": approval.id,
+                            "artifact_id": approval.artifact_id,
+                            "result_artifact_id": result_artifact.id,
+                        },
+                        approval.run_id,
+                    )
+                ],
+            )
+            return applied
+        except Exception as exc:
+            failed = approval.fail(str(exc))
+            self._approvals.update_approval(
+                failed,
+                [
+                    Event.create(
+                        approval.project_id,
+                        EventType.APPROVAL_FAILED,
+                        {"approval_id": approval.id, "reason": str(exc)},
+                        approval.run_id,
+                    )
+                ],
+            )
+            raise
+
+    def reject(self, project_id: str, run_id: str, approval_id: str) -> Approval:
+        approval = self._scoped_approval(project_id, run_id, approval_id)
+        if approval.status == ApprovalStatus.APPLIED:
+            raise ValueError("applied approvals cannot be rejected")
+        if approval.status == ApprovalStatus.REJECTED:
+            return approval
+        rejected = approval.reject()
+        self._approvals.update_approval(
+            rejected,
+            [
+                Event.create(
+                    approval.project_id,
+                    EventType.APPROVAL_REJECTED,
+                    {"approval_id": approval.id, "artifact_id": approval.artifact_id},
+                    approval.run_id,
+                )
+            ],
+        )
+        return rejected
+
+    def _scoped_approval(self, project_id: str, run_id: str, approval_id: str) -> Approval:
+        approval = self._approvals.get_approval(approval_id)
+        if approval.project_id != project_id or approval.run_id != run_id:
+            raise KeyError(f"approval not found in run: {approval_id}")
+        return approval
+
+    def _apply_request_from_proposal(self, approval: Approval) -> ToolRequest:
+        payload = json.loads(self._artifacts.get_text(approval.artifact_id))
+        request = payload.get("request")
+        result = payload.get("result")
+        if not isinstance(request, dict) or request.get("name") != "workspace.propose_text_file_write":
+            raise ValueError("approval does not reference a text-file write proposal")
+        tool_input = request.get("input")
+        if not isinstance(tool_input, dict):
+            raise ValueError("proposal input is invalid")
+        metadata = result.get("metadata") if isinstance(result, dict) else None
+        if not isinstance(metadata, dict) or metadata.get("applied") is not False:
+            raise ValueError("proposal result is invalid or already applied")
+        path = tool_input.get("path")
+        content = tool_input.get("content")
+        if not isinstance(path, str) or not isinstance(content, str):
+            raise ValueError("proposal path and content are required")
+        return ToolRequest(
+            "workspace.apply_text_file_write",
+            {
+                "path": path,
+                "content": content,
+                "proposal_artifact_id": approval.artifact_id,
+                "approval_id": approval.id,
+            },
+        )
+
+    def _put_apply_artifact(
+        self,
+        approval: Approval,
+        request: ToolRequest,
+        result: ToolExecutionResult,
+        error: str | None,
+    ) -> ArtifactMetadata:
+        content = {
+            "request": _tool_request_without_content(request),
+            "approval_id": approval.id,
+            "proposal_artifact_id": approval.artifact_id,
+            "result": None if result is None else {"content": result.content, "metadata": result.metadata},
+            "error": error,
+        }
+        return self._artifacts.put_text(
+            project_id=approval.project_id,
+            run_id=approval.run_id,
+            kind="tool.execution",
+            name=f"approved-apply-{approval.id}.json",
+            content=json.dumps(content, indent=2, sort_keys=True),
+        )
 
 
 class RootService:

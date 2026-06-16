@@ -50,6 +50,13 @@ class TaskStatus(StrEnum):
     FAILED = "failed"
 
 
+class ApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPLIED = "applied"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
 class EventType(StrEnum):
     PROJECT_CREATED = "project.created"
     RUN_CREATED = "run.created"
@@ -67,6 +74,10 @@ class EventType(StrEnum):
     TOOL_DENIED = "tool.denied"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
+    APPROVAL_CREATED = "approval.created"
+    APPROVAL_APPLIED = "approval.applied"
+    APPROVAL_REJECTED = "approval.rejected"
+    APPROVAL_FAILED = "approval.failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +249,94 @@ class ArtifactMetadata:
             raise ValueError("artifact kind is required")
         if not self.uri:
             raise ValueError("artifact uri is required")
+
+
+@dataclass(frozen=True, slots=True)
+class Approval:
+    id: str
+    project_id: str
+    run_id: str
+    agent_run_id: str
+    artifact_id: str
+    action: str
+    status: ApprovalStatus
+    created_at: datetime = field(default_factory=utc_now)
+    decided_at: datetime | None = None
+    result_artifact_id: str | None = None
+    failure_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        require_uuid(self.id, "approval id")
+        require_uuid(self.project_id, "project id")
+        require_uuid(self.run_id, "run id")
+        require_uuid(self.agent_run_id, "agent run id")
+        require_uuid(self.artifact_id, "artifact id")
+        if self.result_artifact_id is not None:
+            require_uuid(self.result_artifact_id, "result artifact id")
+        if not self.action.strip():
+            raise ValueError("approval action is required")
+
+    @classmethod
+    def create(
+        cls,
+        project_id: str,
+        run_id: str,
+        agent_run_id: str,
+        artifact_id: str,
+        action: str,
+    ) -> Approval:
+        return cls(
+            id=new_id(),
+            project_id=project_id,
+            run_id=run_id,
+            agent_run_id=agent_run_id,
+            artifact_id=artifact_id,
+            action=action,
+            status=ApprovalStatus.PENDING,
+        )
+
+    def apply(self, result_artifact_id: str) -> Approval:
+        return Approval(
+            id=self.id,
+            project_id=self.project_id,
+            run_id=self.run_id,
+            agent_run_id=self.agent_run_id,
+            artifact_id=self.artifact_id,
+            action=self.action,
+            status=ApprovalStatus.APPLIED,
+            created_at=self.created_at,
+            decided_at=utc_now(),
+            result_artifact_id=result_artifact_id,
+        )
+
+    def reject(self) -> Approval:
+        return Approval(
+            id=self.id,
+            project_id=self.project_id,
+            run_id=self.run_id,
+            agent_run_id=self.agent_run_id,
+            artifact_id=self.artifact_id,
+            action=self.action,
+            status=ApprovalStatus.REJECTED,
+            created_at=self.created_at,
+            decided_at=utc_now(),
+            result_artifact_id=self.result_artifact_id,
+        )
+
+    def fail(self, reason: str) -> Approval:
+        return Approval(
+            id=self.id,
+            project_id=self.project_id,
+            run_id=self.run_id,
+            agent_run_id=self.agent_run_id,
+            artifact_id=self.artifact_id,
+            action=self.action,
+            status=ApprovalStatus.FAILED,
+            created_at=self.created_at,
+            decided_at=utc_now(),
+            result_artifact_id=self.result_artifact_id,
+            failure_reason=reason,
+        )
 
 
 @dataclass(frozen=True, slots=True)

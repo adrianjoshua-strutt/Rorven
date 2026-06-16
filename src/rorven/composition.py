@@ -15,7 +15,7 @@ from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime import LangGraphAgentRuntime
 from rorven.adapters.tools import LocalWorkspaceToolBroker
 from rorven.application.ports import ModelGateway
-from rorven.application.services import ProjectService, RootService, WorkerService
+from rorven.application.services import ApprovalService, ProjectService, RootService, WorkerService
 from rorven.application.tools import WorkspaceReadPolicy
 from rorven.env import load_local_env
 
@@ -25,6 +25,7 @@ class LocalServices:
     data_dir: Path
     store: LocalFilePlatformStore
     projects: ProjectService
+    approvals: ApprovalService
     root: RootService
     worker: WorkerService
 
@@ -35,6 +36,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
     store = LocalFilePlatformStore(root)
     runtime = _create_runtime_adapter(store)
     model_gateway = _create_model_gateway(store)
+    tool_broker = LocalWorkspaceToolBroker()
     return LocalServices(
         data_dir=root,
         store=store,
@@ -44,6 +46,13 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             tasks=store,
             runtime=runtime,
             artifacts=store,
+            approvals=store,
+        ),
+        approvals=ApprovalService(
+            runs=store,
+            approvals=store,
+            artifacts=store,
+            tool_broker=tool_broker,
         ),
         root=RootService(runs=store, root_messages=store, model_gateway=model_gateway),
         worker=WorkerService(
@@ -52,8 +61,9 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             artifacts=store,
             events=store,
             model_gateway=model_gateway,
+            approvals=store,
             tool_policy=WorkspaceReadPolicy(),
-            tool_broker=LocalWorkspaceToolBroker(),
+            tool_broker=tool_broker,
         ),
     )
 

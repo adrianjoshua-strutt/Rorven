@@ -7,7 +7,7 @@
 - [x] Generate unified diffs for existing files.
 - [x] Preserve files unchanged.
 - [x] Persist proposal artifacts through worker execution.
-- [ ] Add approval records for mutable actions.
-- [ ] Add approved apply tool.
+- [x] Add approval records for mutable actions.
+- [x] Add approved apply tool.
 - [ ] Add sandbox isolation for apply.
 - [ ] Add recovery tests for interrupted apply.

@@ -18,6 +18,7 @@ from rorven.application.dispatching import (
 )
 from rorven.application.modeling import ModelMessage, ModelRequest, ModelResponse
 from rorven.application.ports import (
+    ApprovalRepository,
     ArtifactStore,
     EventRepository,
     ModelGateway,
@@ -35,7 +36,7 @@ from rorven.application.tools import (
     tool_request_to_json,
     tool_results_prompt,
 )
-from rorven.domain import AgentRun, ArtifactMetadata, Event, EventType, ModelProfile, RunStatus, Task
+from rorven.domain import Approval, AgentRun, ArtifactMetadata, Event, EventType, ModelProfile, RunStatus, Task
 
 
 class WorkerService:
@@ -46,6 +47,7 @@ class WorkerService:
         artifacts: ArtifactStore,
         events: EventRepository,
         model_gateway: ModelGateway,
+        approvals: ApprovalRepository,
         tool_policy: ToolPolicy | None = None,
         tool_broker: ToolBroker | None = None,
     ) -> None:
@@ -54,6 +56,7 @@ class WorkerService:
         self._artifacts = artifacts
         self._events = events
         self._model_gateway = model_gateway
+        self._approvals = approvals
         self._tool_policy = tool_policy or DenyAllToolPolicy()
         self._tool_broker = tool_broker
 
@@ -151,7 +154,7 @@ class WorkerService:
             self._events_marker(
                 agent_run,
                 EventType.TOOL_REQUESTED,
-                {"tool": request.name, "input": request.input},
+                {"tool": request.name, "input": _safe_tool_input(request)},
             )
             decision = self._tool_policy.evaluate(project, agent_run, request)
             if not decision.allowed:
@@ -212,16 +215,52 @@ class WorkerService:
                 EventType.TOOL_COMPLETED,
                 {"tool": request.name, "artifact_id": artifact.id, **result.metadata},
             )
+            approval = self._create_approval_for_proposal(agent_run, request, result, artifact)
             results.append(
                 {
                     "tool": request.name,
                     "allowed": True,
                     "artifact_id": artifact.id,
+                    "approval_id": approval.id if approval else None,
                     "metadata": result.metadata,
                     "content": result.content,
                 }
             )
         return results
+
+    def _create_approval_for_proposal(
+        self,
+        agent_run: AgentRun,
+        request: ToolRequest,
+        result: ToolExecutionResult,
+        artifact: ArtifactMetadata,
+    ) -> Approval | None:
+        if request.name != "workspace.propose_text_file_write":
+            return None
+        if result.metadata.get("proposal") != "text-file-write":
+            return None
+        approval = Approval.create(
+            project_id=agent_run.project_id,
+            run_id=agent_run.run_id,
+            agent_run_id=agent_run.id,
+            artifact_id=artifact.id,
+            action="workspace.apply_text_file_write",
+        )
+        self._approvals.add_approval(
+            approval,
+            Event.create(
+                agent_run.project_id,
+                EventType.APPROVAL_CREATED,
+                {
+                    "approval_id": approval.id,
+                    "artifact_id": artifact.id,
+                    "action": approval.action,
+                    "path": result.metadata.get("path"),
+                },
+                agent_run.run_id,
+            ),
+        )
+        return approval
 
     def _put_tool_artifact(
         self,
@@ -574,3 +613,16 @@ def _format_model_response(response: ModelResponse, content: str) -> str:
     if response.model:
         model_line = f"{model_line}/{response.model}"
     return f"{model_line}{_format_usage(response.usage)}\n\n{content.strip()}"
+
+
+def _safe_tool_input(request: ToolRequest) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in request.input.items():
+        if key == "content":
+            if isinstance(value, str):
+                result["content_bytes"] = len(value.encode("utf-8"))
+            else:
+                result["content_present"] = True
+            continue
+        result[key] = value
+    return result

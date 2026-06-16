@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from rorven.application.services import ProjectState, RootActivity, RootDashboardState, RunState
-from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
+from rorven.domain import AgentRun, Approval, ArtifactMetadata, Event, Project, Run, Task
 
 
 def project_state_to_api(state: ProjectState) -> dict[str, Any]:
@@ -23,6 +23,7 @@ def run_state_to_api(state: RunState) -> dict[str, Any]:
             artifact_to_api(artifact, state.artifact_contents.get(artifact.id, ""))
             for artifact in state.artifacts
         ],
+        "approvals": [approval_to_api(approval) for approval in state.approvals],
     }
 
 
@@ -98,6 +99,22 @@ def artifact_to_api(artifact: ArtifactMetadata, content: str) -> dict[str, Any]:
         "uri": artifact.uri,
         "content": content,
         "created_at": _dt(artifact.created_at),
+    }
+
+
+def approval_to_api(approval: Approval) -> dict[str, Any]:
+    return {
+        "id": approval.id,
+        "project_id": approval.project_id,
+        "run_id": approval.run_id,
+        "agent_run_id": approval.agent_run_id,
+        "artifact_id": approval.artifact_id,
+        "action": approval.action,
+        "status": approval.status.value,
+        "created_at": _dt(approval.created_at),
+        "decided_at": _dt(approval.decided_at) if approval.decided_at else None,
+        "result_artifact_id": approval.result_artifact_id,
+        "failure_reason": approval.failure_reason,
     }
 
 

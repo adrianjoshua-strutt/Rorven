@@ -32,4 +32,7 @@ approval/apply flows.
 
 - Backend tests prove proposal diffs are generated and files remain unchanged.
 - Worker tests prove proposal artifacts are persisted in a run.
+- Worker tests prove successful proposals create pending approvals.
+- API tests prove approved proposal application mutates the target file only
+  after approval.
 - Frontend build succeeds against the unchanged API contract.

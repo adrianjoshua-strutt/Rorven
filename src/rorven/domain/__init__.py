@@ -3,6 +3,8 @@
 from rorven.domain.model import (
     AgentDefinitionRef,
     AgentRun,
+    Approval,
+    ApprovalStatus,
     ArtifactMetadata,
     Event,
     EventType,
@@ -20,6 +22,8 @@ from rorven.domain.model import (
 __all__ = [
     "AgentDefinitionRef",
     "AgentRun",
+    "Approval",
+    "ApprovalStatus",
     "ArtifactMetadata",
     "Event",
     "EventType",

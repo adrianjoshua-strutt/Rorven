@@ -76,6 +76,30 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertFalse(result.metadata["applied"])
         self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
 
+    def test_local_workspace_broker_applies_text_write_after_approval_path(self) -> None:
+        project, child, _root = _project_and_agents()
+        workspace = Path(project.workspace.workspace_root)
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+
+        result = LocalWorkspaceToolBroker().execute(
+            project,
+            child,
+            ToolRequest(
+                "workspace.apply_text_file_write",
+                {
+                    "path": "README.md",
+                    "content": "After\n",
+                    "proposal_artifact_id": "22222222-2222-4222-8222-222222222222",
+                    "approval_id": "33333333-3333-4333-8333-333333333333",
+                },
+            ),
+        )
+
+        self.assertTrue(result.metadata["applied"])
+        self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+
 
 def _project_and_agents() -> tuple[Project, AgentRun, AgentRun]:
     root = Path("test-output") / "tests" / f"workspace-tools-{uuid4()}"

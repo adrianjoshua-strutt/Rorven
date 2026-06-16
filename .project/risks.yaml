@@ -59,3 +59,7 @@ risks:
     title: No worker task execution loop means projects silently queue without progressing
     severity: high
     mitigation: implement the task execution loop (M1) before any user-facing project workflow claims are made; ChatView shows queued status explicitly
+  - id: R-016
+    title: Approved local workspace apply lacks sandbox and recovery hardening
+    severity: high
+    mitigation: keep apply behind explicit approval records; add idempotency keys, interrupted-apply recovery tests, and sandbox isolation before expanding mutable tools

@@ -73,9 +73,13 @@ The first implemented tool slice is local read-only workspace inspection:
   credential files are denied before execution.
 - Text-file write proposals return persisted unified diffs and do not modify the
   workspace.
+- Successful text-file write proposals create pending approval records. Approval
+  or rejection is exposed through run-scoped API endpoints.
+- Approved text-file writes are applied through the workspace broker by the
+  approval service; agents do not receive the apply tool through policy.
 - Tool requests, denials, completions, failures, and output artifacts are persisted
   for run inspection.
-- No apply-write, shell, git, browser, network, or secret-bearing tools exist yet.
+- No shell, git, browser, network, or secret-bearing tools exist yet.
 
 ## Redaction
 
