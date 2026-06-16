@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import unittest
 from uuid import uuid4
 
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime.local import LocalDeterministicRuntime
+from rorven.adapters.model.local import LocalModelGateway
 from rorven.application.services import ProjectService, WorkerService
 
 
@@ -19,8 +21,15 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             tasks=store,
             runtime=LocalDeterministicRuntime(store),
+            artifacts=store,
         )
-        worker = WorkerService(runs=store, tasks=store, artifacts=store, events=store)
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=LocalModelGateway(),
+        )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
         run_state = projects.submit_task(project.id, "Build backend and frontend")
@@ -32,6 +41,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=reopened,
             tasks=reopened,
             runtime=LocalDeterministicRuntime(reopened),
+            artifacts=reopened,
         )
         reopened_state = reopened_projects.get_run_state(project.id, run_state.run.id)
 
@@ -49,6 +59,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             tasks=store,
             runtime=LocalDeterministicRuntime(store),
+            artifacts=store,
         )
 
         first = projects.create_project("First", "D:/workspaces", "D:/workspaces/first")
@@ -60,6 +71,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=reopened,
             tasks=reopened,
             runtime=LocalDeterministicRuntime(reopened),
+            artifacts=reopened,
         )
 
         self.assertEqual(
@@ -76,12 +88,35 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             tasks=store,
             runtime=LocalDeterministicRuntime(store),
+            artifacts=store,
         )
 
         projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
 
         with self.assertRaises(ValueError):
             projects.create_project("Duplicate", "D:/workspaces", "D:/workspaces/example/")
+
+    def test_store_adds_missing_artifacts_bucket_on_reopen(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-migration-{uuid4()}"
+        root.mkdir(parents=True, exist_ok=True)
+        state_path = root / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "projects": {},
+                    "runs": {},
+                    "agent_runs": {},
+                    "tasks": {},
+                    "events": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        LocalFilePlatformStore(root)
+
+        migrated = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertEqual({}, migrated["artifacts"])
 
 
 if __name__ == "__main__":

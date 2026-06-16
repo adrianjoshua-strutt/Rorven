@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from rorven.application.services import ProjectState, RunState
-from rorven.domain import AgentRun, Event, Project, Run, Task
+from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
 
 
 def project_state_to_api(state: ProjectState) -> dict[str, Any]:
@@ -19,6 +19,10 @@ def run_state_to_api(state: RunState) -> dict[str, Any]:
         "agent_runs": [agent_run_to_api(agent_run) for agent_run in state.agent_runs],
         "tasks": [task_to_api(task) for task in state.tasks],
         "events": [event_to_api(event) for event in state.events if event.run_id == state.run.id],
+        "artifacts": [
+            artifact_to_api(artifact, state.artifact_contents.get(artifact.id, ""))
+            for artifact in state.artifacts
+        ],
     }
 
 
@@ -82,6 +86,18 @@ def event_to_api(event: Event) -> dict[str, Any]:
         "type": event.type.value,
         "payload": event.payload,
         "occurred_at": _dt(event.occurred_at),
+    }
+
+
+def artifact_to_api(artifact: ArtifactMetadata, content: str) -> dict[str, Any]:
+    return {
+        "id": artifact.id,
+        "project_id": artifact.project_id,
+        "run_id": artifact.run_id,
+        "kind": artifact.kind,
+        "uri": artifact.uri,
+        "content": content,
+        "created_at": _dt(artifact.created_at),
     }
 
 

@@ -13,7 +13,10 @@ export function buildProjectChat(
   const running = subagents.length - finished;
   const summary =
     finished === subagents.length && subagents.length > 0
-      ? `All ${subagents.length} subagents finished. I am ready to summarize the result.`
+      ? root?.result_artifact_id
+        ? (run.artifacts.find((artifact) => artifact.id === root.result_artifact_id)?.content ??
+          `All ${subagents.length} subagents finished.`)
+        : `All ${subagents.length} subagents finished. I am preparing the final summary.`
       : subagents.length
         ? `I started ${subagents.length} subagents. ${running} still running, ${finished} finished.`
         : "I am preparing the work plan.";
@@ -39,6 +42,7 @@ export function buildProjectChat(
 
 export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWorkEntry[] {
   const task = run?.tasks.find((candidate) => candidate.agent_run_id === agent.id);
+  const resultArtifact = run?.artifacts.find((artifact) => artifact.id === agent.result_artifact_id);
   const entries: AgentWorkEntry[] = [
     {
       side: "system",
@@ -62,7 +66,7 @@ export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWork
     entries.push({
       side: "agent",
       title: "Result",
-      body: `My result artifact is available: ${agent.result_artifact_id.slice(0, 8)}.`,
+      body: resultArtifact?.content ?? `Result artifact: ${agent.result_artifact_id.slice(0, 8)}.`,
     });
   }
   return entries;

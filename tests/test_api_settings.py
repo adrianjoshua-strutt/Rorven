@@ -38,6 +38,7 @@ class ApiSettingsTests(unittest.TestCase):
         self.assertNotIn("test-secret-that-must-not-leak", payload_text)
         self.assertTrue(payload["credentials"][0]["configured"])
         self.assertFalse(payload["credentials"][0]["raw_value_visible"])
+        self.assertEqual("openrouter", payload["runtime"]["active_model_gateway"])
         self.assertEqual(
             {"utility", "balanced", "reasoning", "frontier"},
             {profile["name"] for profile in payload["model_profiles"]},

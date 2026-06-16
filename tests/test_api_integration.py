@@ -66,6 +66,10 @@ class ApiIntegrationTests(unittest.TestCase):
         state_payload = state_response.json()["run"]
         self.assertEqual("completed", state_payload["status"])
         self.assertEqual({"completed"}, {task["status"] for task in state_payload["tasks"]})
+        self.assertEqual(3, len(state_payload["artifacts"]))
+        self.assertTrue(
+            any("Local model gateway is active" in artifact["content"] for artifact in state_payload["artifacts"])
+        )
         self.assertTrue((data_dir / "state.json").exists())
 
 

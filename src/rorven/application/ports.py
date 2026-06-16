@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Protocol, Sequence
 
+from rorven.application.modeling import ModelRequest, ModelResponse
 from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
 
 
@@ -69,6 +70,9 @@ class TaskQueue(Protocol):
     def complete(self, task_id: str, events: Sequence[Event]) -> None:
         """Mark a task complete and persist completion events atomically."""
 
+    def fail(self, task_id: str, events: Sequence[Event]) -> None:
+        """Mark a task failed and persist failure events atomically."""
+
     def list_for_run(self, run_id: str) -> Sequence[Task]:
         """Return tasks attached to a run tree."""
 
@@ -84,6 +88,12 @@ class ArtifactStore(Protocol):
     ) -> ArtifactMetadata:
         """Persist artifact content and return provider-neutral metadata."""
 
+    def list_artifacts_for_run(self, run_id: str) -> Sequence[ArtifactMetadata]:
+        """Return artifact metadata for a run."""
+
+    def get_text(self, artifact_id: str) -> str:
+        """Return artifact text content by ID."""
+
 
 class AgentRuntime(Protocol):
     def start_parent_run(self, project: Project, command: str) -> Run:
@@ -91,3 +101,8 @@ class AgentRuntime(Protocol):
 
     def plan_child_runs(self, run: Run, parent_agent_run: AgentRun) -> Sequence[AgentRun]:
         """Create durable child agent-run records for independent worker execution."""
+
+
+class ModelGateway(Protocol):
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        """Return one provider-neutral model completion."""

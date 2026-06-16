@@ -52,10 +52,21 @@ export type EventRecord = {
   occurred_at: string;
 };
 
+export type ArtifactRecord = {
+  id: string;
+  project_id: string;
+  run_id: string;
+  kind: string;
+  uri: string;
+  content: string;
+  created_at: string;
+};
+
 export type RunState = RunSummary & {
   agent_runs: AgentRun[];
   tasks: Task[];
   events: EventRecord[];
+  artifacts: ArtifactRecord[];
 };
 
 export type SettingsSnapshot = {
@@ -79,6 +90,7 @@ export type SettingsSnapshot = {
   runtime: {
     active_runtime_adapter: string;
     planned_runtime_adapter: string;
+    active_model_gateway: string;
     system_of_record: string;
     planned_system_of_record: string;
     data_dir: string;

@@ -43,6 +43,8 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
         self._artifact_root.mkdir(parents=True, exist_ok=True)
         if not self._state_path.exists():
             self._write_state(self._empty_state())
+        else:
+            self._migrate_state()
 
     def list_projects(self) -> Sequence[Project]:
         with self._lock:
@@ -223,6 +225,24 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
                 state["events"][event.id] = self._event_to_json(event)
             self._write_state(state)
 
+    def fail(self, task_id: str, events: Sequence[Event]) -> None:
+        with self._lock:
+            state = self._read_state()
+            task = self._task_from_json(state["tasks"][task_id])
+            state["tasks"][task_id] = self._task_to_json(
+                Task(
+                    id=task.id,
+                    agent_run_id=task.agent_run_id,
+                    status=TaskStatus.FAILED,
+                    lease_owner=task.lease_owner,
+                    lease_expires_at=task.lease_expires_at,
+                    created_at=task.created_at,
+                )
+            )
+            for event in events:
+                state["events"][event.id] = self._event_to_json(event)
+            self._write_state(state)
+
     def list_for_run(self, run_id: str) -> Sequence[Task]:
         with self._lock:
             state = self._read_state()
@@ -269,6 +289,26 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             self._write_state(state)
             return artifact
 
+    def list_artifacts_for_run(self, run_id: str) -> Sequence[ArtifactMetadata]:
+        with self._lock:
+            state = self._read_state()
+            artifacts = [
+                self._artifact_from_json(item)
+                for item in state["artifacts"].values()
+                if item["run_id"] == run_id
+            ]
+            return sorted(artifacts, key=lambda item: item.created_at)
+
+    def get_text(self, artifact_id: str) -> str:
+        with self._lock:
+            state = self._read_state()
+            try:
+                artifact = self._artifact_from_json(state["artifacts"][artifact_id])
+            except KeyError as exc:
+                raise KeyError(f"artifact not found: {artifact_id}") from exc
+            path = self._root / artifact.uri
+            return path.read_text(encoding="utf-8")
+
     def _empty_state(self) -> dict[str, dict[str, Any]]:
         return {
             "projects": {},
@@ -278,6 +318,16 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             "events": {},
             "artifacts": {},
         }
+
+    def _migrate_state(self) -> None:
+        state = self._read_state()
+        changed = False
+        for key, value in self._empty_state().items():
+            if key not in state:
+                state[key] = value
+                changed = True
+        if changed:
+            self._write_state(state)
 
     def _read_state(self) -> dict[str, dict[str, Any]]:
         return json.loads(self._state_path.read_text(encoding="utf-8"))
@@ -381,3 +431,13 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
         data = asdict(artifact)
         data["created_at"] = artifact.created_at.isoformat()
         return data
+
+    def _artifact_from_json(self, data: dict[str, Any]) -> ArtifactMetadata:
+        return ArtifactMetadata(
+            id=data["id"],
+            project_id=data["project_id"],
+            run_id=data["run_id"],
+            kind=data["kind"],
+            uri=data["uri"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )

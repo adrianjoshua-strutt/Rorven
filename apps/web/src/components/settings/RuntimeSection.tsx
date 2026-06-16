@@ -27,6 +27,12 @@ export function RuntimeSection({
           detail={`Planned: ${settings?.runtime.planned_runtime_adapter ?? "langgraph"}`}
         />
         <SettingsTile
+          label="Model gateway"
+          value={settings?.runtime.active_model_gateway ?? "Unknown"}
+          state={settings?.runtime.active_model_gateway === "openrouter" ? "configured" : "deferred"}
+          detail="Uses OpenRouter when the API key is configured."
+        />
+        <SettingsTile
           label="System of record"
           value={settings?.runtime.system_of_record ?? "Unknown"}
           state="deferred"
