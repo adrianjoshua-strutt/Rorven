@@ -65,6 +65,8 @@ Status: In progress
 - Verified the OpenRouter adapter sends chat-completions requests through a model-profile mapping and does not expose the configured API key in adapter responses.
 - Verified `/settings` reports OpenRouter credential presence and active model gateway without returning the raw `RORVEN_OPENROUTER_API_KEY` value.
 - Verified workers persist model gateway output as text artifacts and the console displays those artifact contents when a subagent is selected.
+- `6d9b5de` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 15 tests passed after adding a looped worker process mode.
+- `6d9b5de` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after documenting the three-process local run flow.
 
 ## Known deferred evidence
 
