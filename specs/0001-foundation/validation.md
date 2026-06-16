@@ -25,8 +25,8 @@ Status: In progress
 - Verified local deterministic `AgentRuntime` contract creates one parent and two child agent runs with model-profile names only.
 - `658f235` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
 - Verified FastAPI project creation, run submission, worker pass, parent completion, task completion, and persisted state reload through the local file adapter.
-- Current working tree - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
-- Current working tree - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed.
+- `e2ec8a1` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- `e2ec8a1` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed.
 - Verified React/Vite console can reconstruct project runs, run tree, tasks, and events from API state.
 
 ## Known deferred evidence
