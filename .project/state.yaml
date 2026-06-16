@@ -6,11 +6,12 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0001-foundation
-last_verified_commit: 242944a
+last_verified_commit: 0f1032f
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
   frontend: react-vite-typescript
+  frontend_component_framework: mantine
   backend: fastapi-python
   database: postgresql
   runtime_abstraction: AgentRuntime

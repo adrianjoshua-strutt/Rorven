@@ -44,6 +44,11 @@ Status: In progress
 - `242944a` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after replacing the settings modal with a first-class settings surface.
 - `242944a` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - Verified `/settings` reports OpenRouter credential presence without returning the raw `RORVEN_OPENROUTER_API_KEY` value.
+- `0f1032f` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after moving controls, modals, badges, tables, cards, and text inputs to Mantine.
+- `0f1032f` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 10 tests passed.
+- `0f1032f` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Verified root project is represented as a normal chat surface with root-scoped subagent activity rather than a dashboard.
+- Verified chat composers use fixed-height Mantine textareas so empty chat state does not resize the input.
 
 ## Known deferred evidence
 

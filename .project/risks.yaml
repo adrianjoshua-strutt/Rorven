@@ -46,4 +46,4 @@ risks:
   - id: R-012
     title: Console UI drifts away from the product mental model
     severity: high
-    mitigation: keep root, project, subagent, and settings surfaces explicit; migrate from hand-rolled CSS to a chosen design system in a dedicated frontend slice
+    mitigation: keep root, project, subagent, and settings surfaces explicit; use Mantine component primitives for controls and reserve custom CSS for layout only

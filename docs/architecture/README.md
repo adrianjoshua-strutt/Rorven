@@ -32,7 +32,7 @@ The first implementation slice should exercise real ports and adapters without r
 
 ## Initial process topology
 
-- `web`: React/Vite static application
+- `web`: React/Vite static application using Mantine for component primitives
 - `api`: FastAPI control plane
 - `worker`: durable agent and tool execution
 - `scheduler`: delayed and recurring work
