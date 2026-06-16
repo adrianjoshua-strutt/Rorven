@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from rorven.application.services import ProjectState, RunState
+from rorven.application.services import ProjectState, RootActivity, RootDashboardState, RunState
 from rorven.domain import AgentRun, ArtifactMetadata, Event, Project, Run, Task
 
 
@@ -98,6 +98,24 @@ def artifact_to_api(artifact: ArtifactMetadata, content: str) -> dict[str, Any]:
         "uri": artifact.uri,
         "content": content,
         "created_at": _dt(artifact.created_at),
+    }
+
+
+def root_state_to_api(state: RootDashboardState) -> dict[str, Any]:
+    return {
+        "messages": list(state.messages),
+        "activities": [root_activity_to_api(activity) for activity in state.activities],
+    }
+
+
+def root_activity_to_api(activity: RootActivity) -> dict[str, Any]:
+    return {
+        "id": activity.id,
+        "name": activity.name,
+        "modelProfile": activity.model_profile,
+        "status": activity.status,
+        "createdAt": activity.created_at,
+        "summary": activity.summary,
     }
 
 

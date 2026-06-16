@@ -15,7 +15,7 @@ from rorven.adapters.model import (
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime import LangGraphAgentRuntime, LocalDeterministicRuntime
 from rorven.application.ports import ModelGateway
-from rorven.application.services import ProjectService, WorkerService
+from rorven.application.services import ProjectService, RootService, WorkerService
 from rorven.env import load_local_env
 
 
@@ -24,6 +24,7 @@ class LocalServices:
     data_dir: Path
     store: LocalFilePlatformStore
     projects: ProjectService
+    root: RootService
     worker: WorkerService
 
 
@@ -43,6 +44,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             runtime=runtime,
             artifacts=store,
         ),
+        root=RootService(runs=store, root_messages=store, model_gateway=model_gateway),
         worker=WorkerService(
             runs=store,
             tasks=store,
@@ -56,8 +58,11 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
 def _default_data_dir() -> Path:
     configured = os.environ.get("RORVEN_DATA_DIR")
     if configured:
-        return Path(configured).resolve()
-    return (Path(__file__).resolve().parents[2] / ".rorven").resolve()
+        resolved = Path(configured).resolve()
+    else:
+        resolved = (Path(__file__).resolve().parents[2] / ".rorven").resolve()
+    print(f"[rorven] using data directory: {resolved}", flush=True)
+    return resolved
 
 
 def _create_model_gateway() -> ModelGateway:

@@ -16,3 +16,7 @@ class SubmitRunRequest(BaseModel):
 class WorkOnceRequest(BaseModel):
     worker_id: str = Field(default="local-worker", min_length=1)
     limit: int = Field(default=2, ge=1, le=10)
+
+
+class RootMessageRequest(BaseModel):
+    message: str = Field(min_length=1)

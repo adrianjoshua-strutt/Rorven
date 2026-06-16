@@ -107,6 +107,27 @@ export type SettingsSnapshot = {
   };
 };
 
+export type RootActivity = {
+  id: string;
+  name: string;
+  modelProfile: string;
+  status: string;
+  createdAt: string;
+  summary: string;
+};
+
+export type RootDashboard = {
+  messages: {
+    id: string;
+    side: "user" | "orchestrator";
+    title: string;
+    body: string;
+    time: string;
+    status?: string;
+  }[];
+  activities: RootActivity[];
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -132,6 +153,19 @@ export async function listProjects(): Promise<Project[]> {
 export async function getSettings(): Promise<SettingsSnapshot> {
   const payload = await request<{ settings: SettingsSnapshot }>("/settings");
   return payload.settings;
+}
+
+export async function getRootDashboard(): Promise<RootDashboard> {
+  const payload = await request<{ root: RootDashboard }>("/root");
+  return payload.root;
+}
+
+export async function submitRootMessage(message: string): Promise<RootDashboard> {
+  const payload = await request<{ root: RootDashboard }>("/root/messages", {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+  return payload.root;
 }
 
 export async function createProject(input: {

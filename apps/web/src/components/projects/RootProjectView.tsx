@@ -19,7 +19,7 @@ export function RootProjectView({
     <section className="root-view">
       <header className="chat-header">
         <div>
-          <p>System project / local installation</p>
+          <p>System project / live workspace inventory</p>
           <h1>Root project</h1>
         </div>
         <ConnectionState state="idle" />

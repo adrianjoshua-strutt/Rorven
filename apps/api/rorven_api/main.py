@@ -11,6 +11,7 @@ from rorven_api.routes import register_routes
 
 def create_app() -> FastAPI:
     services = create_local_services()
+    print(f"[rorven-api] initialized with {len(services.projects.list_projects())} projects", flush=True)
     app = FastAPI(title="Rorven API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,

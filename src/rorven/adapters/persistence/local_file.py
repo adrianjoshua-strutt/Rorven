@@ -299,6 +299,17 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             ]
             return sorted(artifacts, key=lambda item: item.created_at)
 
+    def list_root_messages(self) -> Sequence[dict[str, Any]]:
+        with self._lock:
+            state = self._read_state()
+            return list(state["root_messages"])
+
+    def append_root_message(self, message: dict[str, Any]) -> None:
+        with self._lock:
+            state = self._read_state()
+            state["root_messages"].append(message)
+            self._write_state(state)
+
     def get_text(self, artifact_id: str) -> str:
         with self._lock:
             state = self._read_state()
@@ -317,6 +328,7 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             "tasks": {},
             "events": {},
             "artifacts": {},
+            "root_messages": [],
         }
 
     def _migrate_state(self) -> None:

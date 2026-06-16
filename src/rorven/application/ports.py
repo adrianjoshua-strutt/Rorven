@@ -106,3 +106,11 @@ class AgentRuntime(Protocol):
 class ModelGateway(Protocol):
     def complete(self, request: ModelRequest) -> ModelResponse:
         """Return one provider-neutral model completion."""
+
+
+class RootDashboardRepository(Protocol):
+    def list_root_messages(self) -> Sequence[dict[str, str]]:
+        """Return persisted root-dashboard chat messages in chronological order."""
+
+    def append_root_message(self, message: dict[str, str]) -> None:
+        """Persist one root-dashboard message."""

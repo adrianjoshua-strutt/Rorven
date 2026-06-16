@@ -135,22 +135,39 @@ export function useConsoleController() {
       preferredRunId && project.runs?.some((run) => run.id === preferredRunId)
         ? preferredRunId
         : project.runs?.[0]?.id;
-    setSelectedRun(runId ? await getRun(project.id, runId) : null);
+    if (runId) {
+      const run = await getRun(project.id, runId);
+      setSelectedRun(run);
+    } else {
+      setSelectedRun(null);
+    }
   }
 
   async function handleCreateProject(event: FormEvent) {
     event.preventDefault();
     setError(null);
     try {
-      const project = await createProject(newProject);
-      setProjects((current) => [project, ...current]);
+      const createdProject = await createProject(newProject);
       const loadToken = ++projectLoadSequence.current;
-      setSelectedProjectId(project.id);
+      
+      // Reset form immediately
+      setNewProject({
+        name: "Rorven Local",
+        allowed_root: "D:/Cloud/Dropbox/GitHub",
+        workspace_root: "D:/Cloud/Dropbox/GitHub/rorven",
+      });
+      setShowCreateProject(false);
+      
+      // Fetch fresh projects list
+      const refreshedProjects = await listProjects();
+      setProjects(refreshedProjects);
+      
+      // Select and load the newly created project
+      setSelectedProjectId(createdProject.id);
       setSelectedScope("project");
       setSelectedRun(null);
       setInspectedAgent(null);
-      setShowCreateProject(false);
-      await loadProject(project.id, null, loadToken);
+      await loadProject(createdProject.id, null, loadToken);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to create project");
     }
@@ -160,15 +177,15 @@ export function useConsoleController() {
     event.preventDefault();
     if (!selectedProjectId || !message.trim()) return;
     setError(null);
+    setMessage("");
     try {
-      const loadToken = projectLoadSequence.current;
+      const loadToken = ++projectLoadSequence.current;
       const run = await submitRun(selectedProjectId, message.trim());
-      setSelectedRun(run);
       setInspectedAgent(null);
-      setMessage("");
       await loadProject(selectedProjectId, run.id, loadToken);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to send message");
+      setMessage("Build the next durable platform slice.");
     }
   }
 
@@ -195,7 +212,12 @@ export function useConsoleController() {
     setSelectedScope("project");
     setSelectedRun(null);
     setInspectedAgent(null);
-    await loadProject(projectId, null, loadToken);
+    setError(null);
+    try {
+      await loadProject(projectId, null, loadToken);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to load project");
+    }
   }
 
   function inspectActivity(agent: ActivityCard) {
@@ -203,7 +225,21 @@ export function useConsoleController() {
   }
 
   useEffect(() => {
-    void loadInitialState();
+    // Load initial state on mount - fetch projects and settings
+    setLoadState("loading");
+    setError(null);
+    Promise.all([listProjects(), getSettings()])
+      .then(([nextProjects, nextSettings]) => {
+        setProjects(nextProjects);
+        setSettingsSnapshot(nextSettings);
+        // Auto-select root scope on initial load
+        setSelectedScope("root");
+        setLoadState("idle");
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load initial state");
+        setLoadState("error");
+      });
   }, []);
 
   useEffect(() => {
