@@ -31,6 +31,9 @@ Status: In progress
 - `67bfbd7` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after redesigning the console around project chat and spawned-agent inspection.
 - `67bfbd7` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - `67bfbd7` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
+- Current working tree - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after removing dev controls and replacing the clickable agent inspector with a passive subagent activity rail.
+- Current working tree - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Current working tree - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
 
 ## Known deferred evidence
 
