@@ -61,6 +61,23 @@ stores the returned text as artifacts, and exposes that text in the console when
 subagent is selected. This is not yet a tool-capable coding agent: filesystem, shell,
 sandbox, memory, and brokered tool execution are separate slices.
 
+Local development uses three processes:
+
+```powershell
+$env:PYTHONPATH="src;apps/api;apps/worker"
+.venv\Scripts\python.exe -m uvicorn rorven_api.main:create_app --factory --reload
+```
+
+```powershell
+$env:PYTHONPATH="src;apps/api;apps/worker"
+.venv\Scripts\python.exe -m rorven_worker.main --loop
+```
+
+```powershell
+cd apps/web
+npm.cmd run dev
+```
+
 ## Bootstrap with Codex
 
 Open this folder in VS Code and give Codex the prompt in `CODEX_BOOTSTRAP_PROMPT.md`. Agents should work in small validated steps, update the active feature evidence, and preserve the adapter boundaries rather than wiring providers directly into core code.
