@@ -1,0 +1,252 @@
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Project,
+  RunState,
+  SettingsSnapshot,
+  createProject,
+  getProject,
+  getRun,
+  getSettings,
+  listProjects,
+  submitRun,
+} from "../api";
+import {
+  ActivityCard,
+  InspectedAgent,
+  LoadState,
+  NewProjectDraft,
+  SelectedScope,
+} from "../types";
+import { buildProjectChat } from "../utils/chat";
+import { replaceProjectPreservingOrder } from "../utils/projects";
+import { isDone } from "../utils/status";
+import { useRootProjectController } from "./useRootProjectController";
+
+export function useConsoleController() {
+  const projectLoadSequence = useRef(0);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedScope, setSelectedScope] = useState<SelectedScope>("root");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedRun, setSelectedRun] = useState<RunState | null>(null);
+  const [inspectedAgent, setInspectedAgent] = useState<InspectedAgent | null>(null);
+  const rootProject = useRootProjectController();
+  const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsSnapshot | null>(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [settingsLoadState, setSettingsLoadState] = useState<LoadState>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState<NewProjectDraft>({
+    name: "Rorven Local",
+    allowed_root: "D:/Cloud/Dropbox/GitHub",
+    workspace_root: "D:/Cloud/Dropbox/GitHub/rorven",
+  });
+  const [message, setMessage] = useState("Build the next durable platform slice.");
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
+
+  const subagents = useMemo(
+    () =>
+      selectedScope === "project"
+        ? selectedRun?.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null) ?? []
+        : [],
+    [selectedScope, selectedRun],
+  );
+
+  const activityCards = useMemo<ActivityCard[]>(() => {
+    if (selectedScope === "root") {
+      return rootProject.subagents.map((agent) => ({
+        id: agent.id,
+        title: agent.name,
+        subtitle: `${agent.modelProfile} / root run ${agent.id.slice(0, 8)}`,
+        status: agent.status,
+      }));
+    }
+    return subagents.map((agent) => ({
+      id: agent.id,
+      title: agent.definition.name,
+      subtitle: `${agent.definition.model_profile} / run ${agent.id.slice(0, 8)}`,
+      status: agent.status,
+    }));
+  }, [rootProject.subagents, selectedScope, subagents]);
+
+  const runningSubagents = activityCards.filter((agent) => !isDone(agent.status));
+  const finishedSubagents = activityCards.filter((agent) => isDone(agent.status));
+  const inspectedProjectAgent =
+    inspectedAgent?.scope === "project"
+      ? subagents.find((agent) => agent.id === inspectedAgent.id) ?? null
+      : null;
+  const inspectedRootAgent =
+    inspectedAgent?.scope === "root"
+      ? rootProject.subagents.find((agent) => agent.id === inspectedAgent.id) ?? null
+      : null;
+
+  const chatMessages = useMemo(
+    () => buildProjectChat(selectedProject, selectedRun, subagents),
+    [selectedProject, selectedRun, subagents],
+  );
+
+  async function loadInitialState() {
+    setLoadState("loading");
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      const [nextProjects, nextSettings] = await Promise.all([listProjects(), getSettings()]);
+      setProjects(nextProjects);
+      setSettingsSnapshot(nextSettings);
+      const projectId = selectedScope === "project" ? selectedProjectId : null;
+      if (projectId) {
+        await loadProject(projectId, selectedRun?.id);
+      }
+      setLoadState("idle");
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load projects");
+      setLoadState("error");
+      setSettingsLoadState("error");
+    }
+  }
+
+  async function loadSettings() {
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      setSettingsSnapshot(await getSettings());
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load settings");
+      setSettingsLoadState("error");
+    }
+  }
+
+  async function loadProject(
+    projectId: string,
+    preferredRunId?: string | null,
+    loadToken = projectLoadSequence.current,
+  ) {
+    const project = await getProject(projectId);
+    setProjects((current) => replaceProjectPreservingOrder(current, project));
+    if (loadToken !== projectLoadSequence.current) {
+      return;
+    }
+    const runId =
+      preferredRunId && project.runs?.some((run) => run.id === preferredRunId)
+        ? preferredRunId
+        : project.runs?.[0]?.id;
+    setSelectedRun(runId ? await getRun(project.id, runId) : null);
+  }
+
+  async function handleCreateProject(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      const project = await createProject(newProject);
+      setProjects((current) => [project, ...current]);
+      const loadToken = ++projectLoadSequence.current;
+      setSelectedProjectId(project.id);
+      setSelectedScope("project");
+      setSelectedRun(null);
+      setInspectedAgent(null);
+      setShowCreateProject(false);
+      await loadProject(project.id, null, loadToken);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create project");
+    }
+  }
+
+  async function handleSubmitMessage(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedProjectId || !message.trim()) return;
+    setError(null);
+    try {
+      const loadToken = projectLoadSequence.current;
+      const run = await submitRun(selectedProjectId, message.trim());
+      setSelectedRun(run);
+      setInspectedAgent(null);
+      setMessage("");
+      await loadProject(selectedProjectId, run.id, loadToken);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to send message");
+    }
+  }
+
+  function selectRoot() {
+    projectLoadSequence.current += 1;
+    setSelectedScope("root");
+    setSelectedProjectId(null);
+    setSelectedRun(null);
+    setInspectedAgent(null);
+  }
+
+  function selectSettings() {
+    projectLoadSequence.current += 1;
+    setSelectedScope("settings");
+    setSelectedProjectId(null);
+    setSelectedRun(null);
+    setInspectedAgent(null);
+    void loadSettings();
+  }
+
+  async function selectProject(projectId: string) {
+    const loadToken = ++projectLoadSequence.current;
+    setSelectedProjectId(projectId);
+    setSelectedScope("project");
+    setSelectedRun(null);
+    setInspectedAgent(null);
+    await loadProject(projectId, null, loadToken);
+  }
+
+  function inspectActivity(agent: ActivityCard) {
+    setInspectedAgent({ scope: selectedScope === "root" ? "root" : "project", id: agent.id });
+  }
+
+  useEffect(() => {
+    void loadInitialState();
+  }, []);
+
+  useEffect(() => {
+    if (selectedScope !== "project" || !selectedProjectId) return;
+    const id = window.setInterval(() => {
+      void loadProject(selectedProjectId, selectedRun?.id);
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [selectedScope, selectedProjectId, selectedRun?.id]);
+
+  return {
+    activityCards,
+    chatMessages,
+    error,
+    finishedSubagents,
+    handleCreateProject,
+    handleSubmitMessage,
+    handleSubmitRootMessage: rootProject.handleSubmit,
+    inspectActivity,
+    inspectedProjectAgent,
+    inspectedRootAgent,
+    loadSettings,
+    loadState,
+    message,
+    newProject,
+    projects,
+    rootMessage: rootProject.message,
+    rootMessages: rootProject.messages,
+    runningSubagents,
+    selectedProject,
+    selectedProjectId,
+    selectedRun,
+    selectedScope,
+    selectProject,
+    selectRoot,
+    selectSettings,
+    setInspectedAgent,
+    setMessage,
+    setNewProject,
+    setRootMessage: rootProject.setMessage,
+    setShowCreateProject,
+    settingsLoadState,
+    settingsSnapshot,
+    showCreateProject,
+  };
+}
