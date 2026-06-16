@@ -3,10 +3,14 @@ import { createRoot } from "react-dom/client";
 import {
   Bot,
   CircleDashed,
+  ChevronLeft,
   FolderPlus,
+  Menu,
   MessageSquare,
+  Plus,
   Search,
   Send,
+  Settings,
   Sparkles,
   User,
 } from "lucide-react";
@@ -36,6 +40,9 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunState | null>(null);
+  const [inspectedAgentId, setInspectedAgentId] = useState<string | null>(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [newProject, setNewProject] = useState({
@@ -58,6 +65,7 @@ function App() {
 
   const runningSubagents = subagents.filter((agent) => !isDone(agent.status));
   const finishedSubagents = subagents.filter((agent) => isDone(agent.status));
+  const inspectedAgent = subagents.find((agent) => agent.id === inspectedAgentId) ?? null;
 
   const chatMessages = useMemo(() => buildProjectChat(selectedProject, selectedRun, subagents), [
     selectedProject,
@@ -74,7 +82,7 @@ function App() {
       const projectId = selectedProjectId ?? nextProjects[0]?.id ?? null;
       setSelectedProjectId(projectId);
       if (projectId) {
-        await loadProject(projectId);
+        await loadProject(projectId, selectedRun?.id);
       }
       setLoadState("idle");
     } catch (caught) {
@@ -83,13 +91,16 @@ function App() {
     }
   }
 
-  async function loadProject(projectId: string, preferredRunId = selectedRun?.id) {
+  async function loadProject(projectId: string, preferredRunId?: string | null) {
     const project = await getProject(projectId);
     setProjects((current) => [
       project,
       ...current.filter((candidate) => candidate.id !== project.id),
     ]);
-    const runId = preferredRunId ?? project.runs?.[0]?.id;
+    const runId =
+      preferredRunId && project.runs?.some((run) => run.id === preferredRunId)
+        ? preferredRunId
+        : project.runs?.[0]?.id;
     if (runId) {
       setSelectedRun(await getRun(project.id, runId));
     } else {
@@ -105,6 +116,8 @@ function App() {
       setProjects((current) => [project, ...current]);
       setSelectedProjectId(project.id);
       setSelectedRun(null);
+      setInspectedAgentId(null);
+      setShowCreateProject(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to create project");
     }
@@ -117,6 +130,7 @@ function App() {
     try {
       const run = await submitRun(selectedProjectId, message.trim());
       setSelectedRun(run);
+      setInspectedAgentId(null);
       setMessage("");
       await loadProject(selectedProjectId, run.id);
     } catch (caught) {
@@ -131,7 +145,7 @@ function App() {
   useEffect(() => {
     if (!selectedProjectId) return;
     const id = window.setInterval(() => {
-      void loadProject(selectedProjectId);
+      void loadProject(selectedProjectId, selectedRun?.id);
     }, 2500);
     return () => window.clearInterval(id);
   }, [selectedProjectId, selectedRun?.id]);
@@ -154,44 +168,20 @@ function App() {
           <span>Project search, statistics, setup</span>
         </button>
 
-        <form className="new-project" onSubmit={handleCreateProject}>
-          <div className="section-label">
-            <FolderPlus size={14} aria-hidden="true" />
-            <span>New workspace project</span>
-          </div>
-          <label>
-            <span>Name</span>
-            <input
-              value={newProject.name}
-              onChange={(event) => setNewProject({ ...newProject, name: event.target.value })}
-            />
-          </label>
-          <label>
-            <span>Workspace root</span>
-            <input
-              value={newProject.workspace_root}
-              onChange={(event) =>
-                setNewProject({ ...newProject, workspace_root: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            <span>Allowed root</span>
-            <input
-              value={newProject.allowed_root}
-              onChange={(event) =>
-                setNewProject({ ...newProject, allowed_root: event.target.value })
-              }
-            />
-          </label>
-          <button className="primary-button" type="submit">
-            Create
+        <div className="sidebar-actions">
+          <button className="small-button" onClick={() => setShowCreateProject(true)} type="button">
+            <Plus size={14} aria-hidden="true" />
+            Project
           </button>
-        </form>
+          <button className="small-button" onClick={() => setShowSettings(true)} type="button">
+            <Settings size={14} aria-hidden="true" />
+            Settings
+          </button>
+        </div>
 
         <div className="section-label">
           <Search size={14} aria-hidden="true" />
-          <span>Projects</span>
+          <span>Your projects</span>
         </div>
 
         <nav className="project-list" aria-label="Projects">
@@ -201,7 +191,9 @@ function App() {
               className={project.id === selectedProjectId ? "project-card active" : "project-card"}
               onClick={async () => {
                 setSelectedProjectId(project.id);
-                await loadProject(project.id);
+                setSelectedRun(null);
+                setInspectedAgentId(null);
+                await loadProject(project.id, null);
               }}
               type="button"
             >
@@ -213,40 +205,46 @@ function App() {
       </aside>
 
       <section className="chat-pane">
-        <header className="chat-header">
-          <div>
-            <p>{selectedProject?.workspace.workspace_root ?? "No workspace selected"}</p>
-            <h1>{selectedProject?.name ?? "Choose a project"}</h1>
-          </div>
-          <ConnectionState state={loadState} />
-        </header>
+        {inspectedAgent ? (
+          <AgentWorkView agent={inspectedAgent} run={selectedRun} onBack={() => setInspectedAgentId(null)} />
+        ) : (
+          <>
+            <header className="chat-header">
+              <div>
+                <p>{selectedProject?.workspace.workspace_root ?? "No workspace selected"}</p>
+                <h1>{selectedProject?.name ?? "Choose a project"}</h1>
+              </div>
+              <ConnectionState state={loadState} />
+            </header>
 
-        {error ? <div className="error-banner">{error}</div> : null}
+            {error ? <div className="error-banner">{error}</div> : null}
 
-        <div className="message-list" aria-label="Project orchestrator chat">
-          {chatMessages.length > 0 ? (
-            chatMessages.map((item) => <ChatBubble item={item} key={item.id} />)
-          ) : (
-            <div className="empty-chat">
-              <MessageSquare size={28} aria-hidden="true" />
-              <strong>Talk to the project orchestrator.</strong>
-              <span>Subagents run in the background and appear in the activity rail.</span>
+            <div className="message-list" aria-label="Project orchestrator chat">
+              {chatMessages.length > 0 ? (
+                chatMessages.map((item) => <ChatBubble item={item} key={item.id} />)
+              ) : (
+                <div className="empty-chat">
+                  <MessageSquare size={28} aria-hidden="true" />
+                  <strong>Talk to the project orchestrator.</strong>
+                  <span>Subagents run in the background and appear in the activity rail.</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <form className="composer" onSubmit={handleSubmitMessage}>
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Tell the project orchestrator what to do..."
-            rows={3}
-          />
-          <button className="send-button" disabled={!selectedProjectId} type="submit">
-            <Send size={16} aria-hidden="true" />
-            Send
-          </button>
-        </form>
+            <form className="composer" onSubmit={handleSubmitMessage}>
+              <textarea
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder="Message the project orchestrator"
+                rows={1}
+              />
+              <button className="send-button" disabled={!selectedProjectId} type="submit">
+                <Send size={16} aria-hidden="true" />
+                Send
+              </button>
+            </form>
+          </>
+        )}
       </section>
 
       <aside className="subagents-pane">
@@ -255,9 +253,73 @@ function App() {
           <h2>{subagents.length ? `${subagents.length} spawned` : "Idle"}</h2>
         </header>
 
-        <SubagentGroup title="Running" agents={runningSubagents} emptyText="No active subagents." />
-        <SubagentGroup title="Finished" agents={finishedSubagents} emptyText="No completed subagents." />
+        <SubagentGroup
+          title="Running"
+          agents={runningSubagents}
+          emptyText="No active subagents."
+          onInspect={(agent) => setInspectedAgentId(agent.id)}
+        />
+        <SubagentGroup
+          title="Finished"
+          agents={finishedSubagents}
+          emptyText="No completed subagents."
+          onInspect={(agent) => setInspectedAgentId(agent.id)}
+        />
       </aside>
+
+      {showCreateProject ? (
+        <Modal title="Create project" onClose={() => setShowCreateProject(false)}>
+          <form className="modal-form" onSubmit={handleCreateProject}>
+            <label>
+              <span>Name</span>
+              <input
+                value={newProject.name}
+                onChange={(event) => setNewProject({ ...newProject, name: event.target.value })}
+              />
+            </label>
+            <label>
+              <span>Workspace root</span>
+              <input
+                value={newProject.workspace_root}
+                onChange={(event) =>
+                  setNewProject({ ...newProject, workspace_root: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              <span>Allowed root</span>
+              <input
+                value={newProject.allowed_root}
+                onChange={(event) =>
+                  setNewProject({ ...newProject, allowed_root: event.target.value })
+                }
+              />
+            </label>
+            <button className="primary-button" type="submit">
+              Create project
+            </button>
+          </form>
+        </Modal>
+      ) : null}
+
+      {showSettings ? (
+        <Modal title="Settings" onClose={() => setShowSettings(false)}>
+          <div className="settings-list">
+            <div>
+              <strong>API endpoint</strong>
+              <span>{import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"}</span>
+            </div>
+            <div>
+              <strong>Runtime</strong>
+              <span>Local deterministic adapter</span>
+            </div>
+            <div>
+              <strong>Frontend framework</strong>
+              <span>React + Vite, custom CSS tokens, lucide icons</span>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </main>
   );
 }
@@ -284,10 +346,12 @@ function SubagentGroup({
   title,
   agents,
   emptyText,
+  onInspect,
 }: {
   title: string;
   agents: AgentRun[];
   emptyText: string;
+  onInspect: (agent: AgentRun) => void;
 }) {
   return (
     <section className="subagent-group">
@@ -298,7 +362,7 @@ function SubagentGroup({
       {agents.length ? (
         <div className="subagent-list">
           {agents.map((agent) => (
-            <article className="subagent-card" key={agent.id}>
+            <button className="subagent-card" key={agent.id} onClick={() => onInspect(agent)} type="button">
               <div className="agent-avatar">
                 <Bot size={17} aria-hidden="true" />
               </div>
@@ -309,13 +373,94 @@ function SubagentGroup({
                 </span>
               </div>
               <StatusPill status={agent.status} />
-            </article>
+            </button>
           ))}
         </div>
       ) : (
         <div className="subagent-empty">{emptyText}</div>
       )}
     </section>
+  );
+}
+
+function AgentWorkView({
+  agent,
+  run,
+  onBack,
+}: {
+  agent: AgentRun;
+  run: RunState | null;
+  onBack: () => void;
+}) {
+  const entries = buildAgentWork(agent, run);
+  return (
+    <section className="agent-work-view">
+      <header className="agent-work-header">
+        <button className="back-button" onClick={onBack} type="button" aria-label="Back to project chat">
+          <ChevronLeft size={18} aria-hidden="true" />
+        </button>
+        <div>
+          <p>Subagent run</p>
+          <h1>{agent.definition.name}</h1>
+        </div>
+        <StatusPill status={agent.status} />
+      </header>
+
+      <div className="agent-work-meta">
+        <div>
+          <strong>Model profile</strong>
+          <span>{agent.definition.model_profile}</span>
+        </div>
+        <div>
+          <strong>Version</strong>
+          <span>{agent.definition.version}</span>
+        </div>
+        <div>
+          <strong>Run id</strong>
+          <span>{agent.id.slice(0, 8)}</span>
+        </div>
+      </div>
+
+      <div className="agent-work-log">
+        {entries.map((entry) => (
+          <article className="work-entry" key={entry.title}>
+            <strong>{entry.title}</strong>
+            <p>{entry.body}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="agent-interrupt">
+        <input placeholder="Interrupt or add context for this subagent" />
+        <button className="secondary-button" type="button">
+          Interrupt
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
+        <header className="modal-header">
+          <h2>{title}</h2>
+          <button className="small-button" onClick={onClose} type="button">
+            Close
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
   );
 }
 
@@ -371,9 +516,36 @@ function isDone(status: string) {
   return status === "completed" || status === "failed" || status === "canceled";
 }
 
+function buildAgentWork(agent: AgentRun, run: RunState | null) {
+  const task = run?.tasks.find((candidate) => candidate.agent_run_id === agent.id);
+  const entries = [
+    {
+      title: "Assignment",
+      body: `${agent.definition.name} was started by the project orchestrator for the current request.`,
+    },
+  ];
+  if (task) {
+    entries.push({
+      title: "Execution",
+      body:
+        task.status === "completed"
+          ? "The worker completed this subagent task and recorded the result."
+          : task.status === "leased"
+            ? `A worker is executing this task${task.lease_owner ? ` (${task.lease_owner})` : ""}.`
+            : "This subagent is waiting for a worker slot.",
+    });
+  }
+  if (agent.result_artifact_id) {
+    entries.push({
+      title: "Result",
+      body: `A result artifact is available: ${agent.result_artifact_id.slice(0, 8)}.`,
+    });
+  }
+  return entries;
+}
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,
 );
-

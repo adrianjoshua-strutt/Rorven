@@ -34,6 +34,9 @@ Status: In progress
 - `2459e46` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after removing dev controls and replacing the clickable agent inspector with a passive subagent activity rail.
 - `2459e46` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - `2459e46` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
+- Current working tree - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after moving project creation into a modal, adding settings, shrinking the composer, fixing project selection, and restoring subagent inspection through the main panel.
+- Current working tree - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Current working tree - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
 
 ## Known deferred evidence
 
