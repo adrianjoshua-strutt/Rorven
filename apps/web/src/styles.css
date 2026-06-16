@@ -109,6 +109,7 @@ button:disabled {
 .root-project span,
 .project-card strong,
 .project-card span,
+.project-card small,
 .subagent-copy strong,
 .subagent-copy span {
   display: block;
@@ -147,6 +148,12 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-card small {
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: 0.72rem;
 }
 
 .sidebar-actions {
@@ -247,7 +254,8 @@ button:focus-visible {
 
 .active {
   border-color: var(--teal);
-  background: rgba(55, 192, 162, 0.08);
+  background: rgba(55, 192, 162, 0.14);
+  box-shadow: inset 3px 0 0 var(--teal);
 }
 
 .chat-pane {

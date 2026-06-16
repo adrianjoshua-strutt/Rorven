@@ -47,7 +47,8 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
     def list_projects(self) -> Sequence[Project]:
         with self._lock:
             state = self._read_state()
-            return [self._project_from_json(item) for item in state["projects"].values()]
+            projects = [self._project_from_json(item) for item in state["projects"].values()]
+            return sorted(projects, key=lambda item: item.created_at, reverse=True)
 
     def get_project(self, project_id: str) -> Project:
         with self._lock:

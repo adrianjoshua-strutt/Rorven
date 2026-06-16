@@ -20,7 +20,7 @@ class LocalServices:
 
 
 def create_local_services(data_dir: Path | None = None) -> LocalServices:
-    root = data_dir or Path(os.environ.get("RORVEN_DATA_DIR", ".rorven")).resolve()
+    root = data_dir or _default_data_dir()
     store = LocalFilePlatformStore(root)
     runtime = LocalDeterministicRuntime(store)
     return LocalServices(
@@ -29,3 +29,10 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
         projects=ProjectService(runs=store, events=store, tasks=store, runtime=runtime),
         worker=WorkerService(runs=store, tasks=store, artifacts=store, events=store),
     )
+
+
+def _default_data_dir() -> Path:
+    configured = os.environ.get("RORVEN_DATA_DIR")
+    if configured:
+        return Path(configured).resolve()
+    return (Path(__file__).resolve().parents[2] / ".rorven").resolve()

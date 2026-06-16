@@ -50,6 +50,12 @@ class ProjectService:
         return self._runs.list_projects()
 
     def create_project(self, name: str, allowed_root: str, workspace_root: str) -> Project:
+        workspace_key = _workspace_key(workspace_root)
+        for existing in self._runs.list_projects():
+            if _workspace_key(existing.workspace.workspace_root) == workspace_key:
+                raise ValueError(
+                    f"project already exists for workspace root: {workspace_root}"
+                )
         project = Project.create(
             name=name,
             workspace=WorkspaceBinding(allowed_root=allowed_root, workspace_root=workspace_root),
@@ -88,6 +94,11 @@ class ProjectService:
         if len(roots) != 1:
             raise RuntimeError(f"expected one root agent run for run {run_id}, found {len(roots)}")
         return roots[0]
+
+
+def _workspace_key(value: str) -> str:
+    return value.replace("\\", "/").rstrip("/").lower()
+
 
 class WorkerService:
     def __init__(

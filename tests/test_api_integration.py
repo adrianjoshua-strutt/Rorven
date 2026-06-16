@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 import unittest
 from uuid import uuid4
@@ -8,12 +9,19 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 
+def _restore_env(name: str, value: str | None) -> None:
+    if value is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = value
+
+
 class ApiIntegrationTests(unittest.TestCase):
     def test_create_project_submit_run_and_work_once(self) -> None:
-        import os
-
         data_dir = Path("test-output") / "tests" / f"api-{uuid4()}"
         data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
         os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
         module = importlib.import_module("rorven_api.main")
         app = module.create_app()
@@ -29,6 +37,16 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(201, project_response.status_code)
         project_id = project_response.json()["project"]["id"]
+
+        duplicate_response = client.post(
+            "/projects",
+            json={
+                "name": "Duplicate",
+                "allowed_root": "D:/workspaces",
+                "workspace_root": "D:/workspaces/example",
+            },
+        )
+        self.assertEqual(400, duplicate_response.status_code)
 
         run_response = client.post(
             f"/projects/{project_id}/runs",

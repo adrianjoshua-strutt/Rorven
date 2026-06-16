@@ -199,10 +199,7 @@ function App() {
     loadToken = projectLoadSequence.current,
   ) {
     const project = await getProject(projectId);
-    setProjects((current) => [
-      project,
-      ...current.filter((candidate) => candidate.id !== project.id),
-    ]);
+    setProjects((current) => replaceProjectPreservingOrder(current, project));
     if (loadToken !== projectLoadSequence.current) {
       return;
     }
@@ -377,6 +374,7 @@ function App() {
             >
               <strong>{project.name}</strong>
               <span>{project.workspace.workspace_root}</span>
+              <small>{formatProjectCreatedAt(project.created_at)}</small>
             </button>
           ))}
         </nav>
@@ -1059,6 +1057,22 @@ function buildProjectChat(
 
 function isDone(status: string) {
   return status === "completed" || status === "failed" || status === "canceled";
+}
+
+function replaceProjectPreservingOrder(projects: Project[], project: Project): Project[] {
+  let found = false;
+  const next = projects.map((candidate) => {
+    if (candidate.id !== project.id) {
+      return candidate;
+    }
+    found = true;
+    return project;
+  });
+  return found ? next : [project, ...next];
+}
+
+function formatProjectCreatedAt(value: string): string {
+  return `Created ${new Date(value).toLocaleString()}`;
 }
 
 function chooseRootSubagents(command: string, createdAt: string): RootAgentActivity[] {
