@@ -1,0 +1,14 @@
+id: orchestrator
+version: 1
+role: project_orchestrator
+prompt_ref: prompts/orchestrator/v1.md
+model_profile: reasoning
+permission_profile: orchestrator-default@1
+memory_policy: project-orchestrator@1
+tools:
+  - agent.spawn
+  - agent.status
+  - agent.cancel
+  - project.memory.search
+  - project.artifacts.read
+completion_contract: orchestrator-result@1

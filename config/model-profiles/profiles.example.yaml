@@ -1,0 +1,25 @@
+version: 1
+provider_adapter: openrouter
+
+profiles:
+  utility:
+    model_id: replace-me
+    fallback_model_ids: []
+    request_timeout_seconds: 60
+
+  balanced:
+    model_id: replace-me
+    fallback_model_ids: []
+    request_timeout_seconds: 120
+
+  reasoning:
+    model_id: replace-me
+    fallback_model_ids: []
+    request_timeout_seconds: 300
+
+  frontier:
+    model_id: replace-me
+    fallback_model_ids: []
+    request_timeout_seconds: 600
+
+project_overrides: {}

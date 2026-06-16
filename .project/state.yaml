@@ -1,0 +1,42 @@
+project_name: rorven
+product_display_name: Rorven
+product_naming_status: provisional-public-project-name
+project_phase: foundation
+status: planning
+constitution_version: 1.1.0
+active_milestone: M1-foundation-and-vertical-slice
+active_feature: 0001-foundation
+last_verified_commit: null
+implementation_started: false
+current_decisions:
+  architecture_style: modular-monolith
+  frontend: react-vite-typescript
+  backend: fastapi-python
+  database: postgresql
+  runtime_abstraction: AgentRuntime
+  initial_runtime_adapter: langgraph
+  model_abstraction: ModelGateway
+  initial_model_provider_adapter: openrouter
+  model_profiles:
+    - utility
+    - balanced
+    - reasoning
+    - frontier
+  secret_abstraction: SecretStore
+  secret_delivery: brokered-tools-first
+  memory_abstraction: MemoryBackend
+  initial_memory_backend: postgres
+  sandbox_abstraction: SandboxProvider
+  initial_sandbox_adapter: docker
+  product_name: Rorven
+  canonical_slug: rorven
+  evolution_policy: migration-first-current-model-only
+  compatibility_policy: exceptional-adr-required
+  startup_migrations: automatic-and-blocking
+next_required_gates:
+  - constitution-approval
+  - adr-review
+  - threat-model-review
+  - migration-architecture-review
+  - vertical-slice-plan-approval
+last_updated: '2026-06-16'

@@ -1,0 +1,13 @@
+id: coder
+version: 1
+role: implementation_agent
+prompt_ref: prompts/coder/v1.md
+model_profile: balanced
+permission_profile: coder-standard@1
+memory_policy: coder-project@1
+tools:
+  - filesystem.read
+  - filesystem.write
+  - shell.run
+  - tests.run
+completion_contract: code-change-result@1

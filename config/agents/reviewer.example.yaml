@@ -1,0 +1,12 @@
+id: reviewer
+version: 1
+role: independent_reviewer
+prompt_ref: prompts/reviewer/v1.md
+model_profile: reasoning
+permission_profile: reviewer-readonly@1
+memory_policy: reviewer-project@1
+tools:
+  - filesystem.read
+  - git.diff
+  - tests.run
+completion_contract: review-result@1

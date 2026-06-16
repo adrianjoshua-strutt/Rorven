@@ -1,0 +1,55 @@
+# Architecture index
+
+## Style
+
+The system is a modular monolith using ports and adapters.
+
+## Stable platform concepts
+
+- Projects
+- Conversations
+- Runs and agent runs
+- Agent definitions and workflows
+- Permissions and capabilities
+- Secret references and bindings
+- Model profiles
+- Memory records and policies
+- Artifacts
+- Events and approvals
+
+## Replaceable subsystems
+
+- Agent runtime
+- Model provider
+- Memory backend
+- Secret store
+- Sandbox provider
+- Artifact store
+- Event transport
+- Scheduler and task queue implementation
+
+## Initial process topology
+
+- `web`: React/Vite static application
+- `api`: FastAPI control plane
+- `worker`: durable agent and tool execution
+- `scheduler`: delayed and recurring work
+- `postgres`: system of record and queue foundation
+- optional reverse proxy for TLS and routing
+
+## Required architecture documents
+
+- `system-context.md`
+- `module-boundaries.md`
+- `runtime.md`
+- `persistence.md`
+- `permissions-and-secrets.md`
+- `memory.md`
+- `model-layer.md`
+- `security.md`
+- `evolution-and-migrations.md`
+- `decisions/`
+
+## Product identity boundary
+
+The provisional product name is **Rorven**, but product branding does not alter domain ports, persistence names, event types, API contracts, or adapter contracts. Canonical identifiers live in `.project/identity.yaml`; the rationale and naming rules live in `docs/product/identity.md`.

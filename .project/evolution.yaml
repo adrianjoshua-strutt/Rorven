@@ -1,0 +1,43 @@
+policy_name: migration-first-evolution
+status: permanent
+canonical_model:
+  runtime_supports: current-only
+  historical_representations: migrate-before-use
+startup:
+  automatic_migrations: true
+  readiness_requires_current_schema: true
+  migration_failure: block-readiness
+  coordinator: database-lock
+rollback:
+  downgrade_in_place: not-guaranteed
+  default_strategy: restore-compatible-backup
+compatibility_exceptions:
+  default: prohibited
+  allowed_only_when: migration-cannot-reasonably-solve-boundary-compatibility
+  required:
+    - accepted_adr
+    - isolated_translation_boundary
+    - owner
+    - supported_version_range
+    - removal_condition
+    - latest_removal_date
+    - tests
+  preferred_location:
+    - adapter
+    - api-translation-boundary
+prohibited_by_default:
+  - domain_version_conditionals
+  - application_version_conditionals
+  - permanent_dual_read
+  - permanent_dual_write
+  - legacy_domain_objects
+  - scattered_legacy_dtos
+  - silent_fallback_to_old_schema
+migration_requirements:
+  - ordered
+  - uniquely_identified
+  - auditable
+  - restart_safe
+  - tested_from_supported_origins
+  - post_migration_invariants
+  - backup_gate_for_destructive_changes

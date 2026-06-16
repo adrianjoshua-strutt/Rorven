@@ -1,0 +1,54 @@
+milestones:
+  - id: M1
+    name: Foundation and architecture
+    status: active
+    outcomes:
+      - approved constitution
+      - accepted initial ADR set
+      - stable ports and module boundaries
+      - threat model
+      - test strategy
+      - migration-first evolution architecture
+      - automatic startup migration plan
+
+  - id: M2
+    name: Durable vertical slice
+    status: planned
+    outcomes:
+      - create project and bind workspace
+      - chat with main orchestrator
+      - spawn two parallel subagents
+      - persist state and events
+      - survive API and worker restart
+      - resume after interruption
+
+  - id: M3
+    name: Security and controlled execution
+    status: planned
+    outcomes:
+      - permission engine
+      - secret-store integration
+      - brokered tools
+      - approvals
+      - sandbox isolation
+      - audit trail
+
+  - id: M4
+    name: Project memory and model routing
+    status: planned
+    outcomes:
+      - replaceable project memory
+      - global and project model-profile overrides
+      - usage and cost accounting
+      - prompt and definition versioning
+
+  - id: M5
+    name: Product-grade UI and operations
+    status: planned
+    outcomes:
+      - project navigation
+      - agent-run tree
+      - artifacts and diffs
+      - memory editor
+      - statistics
+      - backup and restore

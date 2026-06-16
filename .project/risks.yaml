@@ -1,0 +1,41 @@
+risks:
+  - id: R-001
+    title: Runtime leakage into domain model
+    severity: high
+    mitigation: architecture import tests and runtime adapter contract
+  - id: R-002
+    title: Raw secrets reach model context or logs
+    severity: critical
+    mitigation: brokered tools, central redaction, no secret values in application database
+  - id: R-003
+    title: Duplicate side effects after worker recovery
+    severity: critical
+    mitigation: idempotency keys, transactional task creation, deduplication records
+  - id: R-004
+    title: Over-abstraction before first working slice
+    severity: medium
+    mitigation: define only ports required by the first vertical slice
+  - id: R-005
+    title: Agent prompt and workflow drift
+    severity: high
+    mitigation: immutable versioned definitions and run-time resolution records
+  - id: R-006
+    title: Memory becomes untrusted hidden state
+    severity: high
+    mitigation: typed memory, provenance, invalidation, UI visibility, normative-doc precedence
+  - id: R-007
+    title: OpenRouter-specific behavior leaks upward
+    severity: medium
+    mitigation: provider-neutral model gateway and adapter contract tests
+  - id: R-008
+    title: Legacy compatibility branches accumulate in runtime code
+    severity: high
+    mitigation: migrate persisted data and configuration to the canonical model before use; require an ADR, owner, telemetry, and removal date for every exception
+  - id: R-009
+    title: Automatic migration fails or leaves partially transformed data
+    severity: critical
+    mitigation: transactional and resumable migrations, preflight checks, backups for destructive changes, startup blocking on failure, and recovery tests
+  - id: R-010
+    title: Provisional product name later requires replacement
+    severity: low
+    mitigation: centralize identity metadata and keep branding out of domain, persistence, event, and API contracts

@@ -1,0 +1,38 @@
+product_name: Rorven
+canonical_slug: rorven
+status: provisional-public-project-name
+meaning:
+  primary: A coined, serious project name with a subtle robotics association in the "Ro" prefix.
+  secondary_association: Intentionally broad enough for durable orchestration and autonomous work.
+canonical_identifiers:
+  repository: rorven
+  cli: rorven
+  config_file: rorven.yaml
+  environment_prefix: RORVEN_
+  python_namespace: rorven
+  typescript_scope: '@rorven'
+  container_prefix: rorven
+component_naming:
+  style: plain-functional
+  examples:
+    - Rorven Console
+    - Rorven API
+    - Rorven Worker
+    - Rorven Runtime
+    - Rorven Model Gateway
+    - Rorven Policy Engine
+    - Rorven Secret Broker
+tagline: Durable infrastructure for autonomous work.
+clearance:
+  status: preliminary-only
+  public_repository: allowed
+  package_publication: deferred-until-live-registry-check
+  commercial_branding: deferred-until-formal-clearance
+  trademark: not-legally-cleared
+  domains: not-reserved
+  identifiers: not-reserved
+usage_constraints:
+  - The name may be used for development and a public source repository.
+  - Do not claim trademark ownership or legal exclusivity.
+  - Re-check and reserve identifiers before publishing stable packages or commercial branding.
+  - Keep branding out of domain types, database tables, event names, and API paths so a rename remains mechanical.
