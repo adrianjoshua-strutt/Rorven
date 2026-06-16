@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from rorven.application.services import ProjectState, RunState
 from rorven.composition import create_local_services
 from rorven.domain import AgentRun, Event, Project, Run, Task
+from rorven_api.settings import read_settings
 
 
 class CreateProjectRequest(BaseModel):
@@ -47,6 +48,10 @@ def create_app() -> FastAPI:
     @app.get("/projects")
     def list_projects() -> dict[str, list[dict[str, Any]]]:
         return {"projects": [_project_to_api(project) for project in services.projects.list_projects()]}
+
+    @app.get("/settings")
+    def get_settings() -> dict[str, Any]:
+        return {"settings": read_settings(services.data_dir)}
 
     @app.post("/projects", status_code=201)
     def create_project(request: CreateProjectRequest) -> dict[str, Any]:
@@ -175,4 +180,3 @@ def _event_to_api(event: Event) -> dict[str, Any]:
 
 def _dt(value: datetime) -> str:
     return value.isoformat()
-

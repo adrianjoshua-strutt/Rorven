@@ -4,13 +4,14 @@ import {
   Bot,
   CircleDashed,
   ChevronLeft,
-  FolderPlus,
-  Menu,
+  Database,
+  KeyRound,
+  Layers3,
   MessageSquare,
   Plus,
   Search,
   Send,
-  Settings,
+  ShieldCheck,
   Sparkles,
   User,
 } from "lucide-react";
@@ -18,7 +19,9 @@ import {
   AgentRun,
   Project,
   RunState,
+  SettingsSnapshot,
   createProject,
+  getSettings,
   getProject,
   getRun,
   listProjects,
@@ -35,7 +38,7 @@ type ChatMessage = {
   time: string;
   status?: string;
 };
-type SelectedScope = "root" | "project";
+type SelectedScope = "root" | "project" | "settings";
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -43,9 +46,10 @@ function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunState | null>(null);
   const [inspectedAgentId, setInspectedAgentId] = useState<string | null>(null);
+  const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsSnapshot | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [settingsLoadState, setSettingsLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [newProject, setNewProject] = useState({
     name: "Rorven Local",
@@ -77,18 +81,34 @@ function App() {
 
   async function loadInitialState() {
     setLoadState("loading");
+    setSettingsLoadState("loading");
     setError(null);
     try {
-      const nextProjects = await listProjects();
+      const [nextProjects, nextSettings] = await Promise.all([listProjects(), getSettings()]);
       setProjects(nextProjects);
+      setSettingsSnapshot(nextSettings);
       const projectId = selectedScope === "project" ? selectedProjectId : null;
       if (projectId) {
         await loadProject(projectId, selectedRun?.id);
       }
       setLoadState("idle");
+      setSettingsLoadState("idle");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load projects");
       setLoadState("error");
+      setSettingsLoadState("error");
+    }
+  }
+
+  async function loadSettings() {
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      setSettingsSnapshot(await getSettings());
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load settings");
+      setSettingsLoadState("error");
     }
   }
 
@@ -116,6 +136,7 @@ function App() {
       const project = await createProject(newProject);
       setProjects((current) => [project, ...current]);
       setSelectedProjectId(project.id);
+      setSelectedScope("project");
       setSelectedRun(null);
       setInspectedAgentId(null);
       setShowCreateProject(false);
@@ -144,12 +165,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId) return;
+    if (selectedScope !== "project" || !selectedProjectId) return;
     const id = window.setInterval(() => {
       void loadProject(selectedProjectId, selectedRun?.id);
     }, 2500);
     return () => window.clearInterval(id);
-  }, [selectedProjectId, selectedRun?.id]);
+  }, [selectedScope, selectedProjectId, selectedRun?.id]);
 
   return (
     <main className="app-shell">
@@ -178,14 +199,25 @@ function App() {
           <span>Project search, statistics, setup</span>
         </button>
 
+        <button
+          className={selectedScope === "settings" ? "root-project active" : "root-project"}
+          onClick={() => {
+            setSelectedScope("settings");
+            setSelectedProjectId(null);
+            setSelectedRun(null);
+            setInspectedAgentId(null);
+            void loadSettings();
+          }}
+          type="button"
+        >
+          <strong>Settings</strong>
+          <span>Credentials, model tiers, runtime</span>
+        </button>
+
         <div className="sidebar-actions">
           <button className="small-button" onClick={() => setShowCreateProject(true)} type="button">
             <Plus size={14} aria-hidden="true" />
             Project
-          </button>
-          <button className="small-button" onClick={() => setShowSettings(true)} type="button">
-            <Settings size={14} aria-hidden="true" />
-            Settings
           </button>
         </div>
 
@@ -224,6 +256,13 @@ function App() {
           <AgentWorkView agent={inspectedAgent} run={selectedRun} onBack={() => setInspectedAgentId(null)} />
         ) : selectedScope === "root" ? (
           <RootProjectView projectCount={projects.length} />
+        ) : selectedScope === "settings" ? (
+          <SettingsView
+            apiEndpoint={import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"}
+            loadState={settingsLoadState}
+            settings={settingsSnapshot}
+            onReload={() => void loadSettings()}
+          />
         ) : (
           <>
             <header className="chat-header">
@@ -319,24 +358,6 @@ function App() {
         </Modal>
       ) : null}
 
-      {showSettings ? (
-        <Modal title="Settings" onClose={() => setShowSettings(false)}>
-          <div className="settings-list">
-            <div>
-              <strong>API endpoint</strong>
-              <span>{import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"}</span>
-            </div>
-            <div>
-              <strong>Runtime</strong>
-              <span>Local deterministic adapter</span>
-            </div>
-            <div>
-              <strong>Frontend framework</strong>
-              <span>React + Vite, custom CSS tokens, lucide icons</span>
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </main>
   );
 }
@@ -388,6 +409,177 @@ function RootProjectView({ projectCount }: { projectCount: number }) {
       </div>
     </section>
   );
+}
+
+function SettingsView({
+  settings,
+  loadState,
+  apiEndpoint,
+  onReload,
+}: {
+  settings: SettingsSnapshot | null;
+  loadState: LoadState;
+  apiEndpoint: string;
+  onReload: () => void;
+}) {
+  const credential = settings?.credentials[0] ?? null;
+  return (
+    <section className="settings-view">
+      <header className="chat-header">
+        <div>
+          <p>System setup</p>
+          <h1>Settings</h1>
+        </div>
+        <div className="header-actions">
+          <ConnectionState state={loadState} />
+          <button className="small-button icon-button" onClick={onReload} type="button" aria-label="Reload settings">
+            <CircleDashed size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+
+      <div className="settings-content">
+        <section className="settings-section credentials-section">
+          <div className="settings-section-title">
+            <KeyRound size={17} aria-hidden="true" />
+            <div>
+              <strong>Credentials</strong>
+              <span>Secrets stay outside run state and UI state.</span>
+            </div>
+          </div>
+          <div className="settings-grid two-columns">
+            <SettingsTile
+              label={credential?.label ?? "Model provider API key"}
+              value={credential?.environment_variable ?? "RORVEN_OPENROUTER_API_KEY"}
+              state={credential?.configured ? "configured" : "missing"}
+              detail={credential?.notes ?? "Required before real model-provider calls are enabled."}
+            />
+            <SettingsTile
+              label="Secret visibility"
+              value={credential?.raw_value_visible ? "Visible" : "Hidden"}
+              state={credential?.raw_value_visible ? "missing" : "configured"}
+              detail="The API reports presence only. Raw values are never returned."
+            />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-title">
+            <Layers3 size={17} aria-hidden="true" />
+            <div>
+              <strong>Model tiers</strong>
+              <span>Agents ask for these profiles, not provider model IDs.</span>
+            </div>
+          </div>
+          <div className="profile-table">
+            <div className="profile-row header">
+              <span>Tier</span>
+              <span>Adapter</span>
+              <span>Model</span>
+              <span>Timeout</span>
+              <span>Status</span>
+            </div>
+            {settings?.model_profiles.map((profile) => (
+              <div className="profile-row" key={profile.name}>
+                <strong>{profile.name}</strong>
+                <span>{profile.adapter}</span>
+                <span className={profile.model_id_configured ? "" : "muted-value"}>{profile.model_id}</span>
+                <span>{profile.request_timeout_seconds ? `${profile.request_timeout_seconds}s` : "Unset"}</span>
+                <StatusBadge state={profile.model_id_configured ? "configured" : "missing"} />
+              </div>
+            )) ?? <div className="settings-empty">Settings metadata is not loaded.</div>}
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-title">
+            <Database size={17} aria-hidden="true" />
+            <div>
+              <strong>Runtime and storage</strong>
+              <span>Walking skeleton now, production adapters next.</span>
+            </div>
+          </div>
+          <div className="settings-grid">
+            <SettingsTile
+              label="API endpoint"
+              value={apiEndpoint}
+              state="configured"
+              detail="Console control plane."
+            />
+            <SettingsTile
+              label="Runtime adapter"
+              value={settings?.runtime.active_runtime_adapter ?? "Unknown"}
+              state="configured"
+              detail={`Planned: ${settings?.runtime.planned_runtime_adapter ?? "langgraph"}`}
+            />
+            <SettingsTile
+              label="System of record"
+              value={settings?.runtime.system_of_record ?? "Unknown"}
+              state="deferred"
+              detail={`Planned: ${settings?.runtime.planned_system_of_record ?? "postgresql"}`}
+            />
+            <SettingsTile
+              label="Data directory"
+              value={settings?.runtime.data_dir ?? "Unknown"}
+              state="configured"
+              detail="Local durable walking-skeleton state."
+            />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-title">
+            <ShieldCheck size={17} aria-hidden="true" />
+            <div>
+              <strong>Console stack</strong>
+              <span>This needs a real design-system migration.</span>
+            </div>
+          </div>
+          <div className="settings-grid">
+            <SettingsTile
+              label="Frontend"
+              value={settings?.frontend.framework ?? "React + Vite"}
+              state="configured"
+              detail={`Icons: ${settings?.frontend.icon_system ?? "lucide-react"}`}
+            />
+            <SettingsTile
+              label="Design system"
+              value={settings?.frontend.design_system ?? "custom CSS tokens"}
+              state={settings?.frontend.needs_design_system_migration ? "deferred" : "configured"}
+              detail="Current UI is hand-rolled; migrate deliberately."
+            />
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function SettingsTile({
+  label,
+  value,
+  state,
+  detail,
+}: {
+  label: string;
+  value: string;
+  state: "configured" | "missing" | "deferred";
+  detail: string;
+}) {
+  return (
+    <article className="settings-tile">
+      <div>
+        <strong>{label}</strong>
+        <StatusBadge state={state} />
+      </div>
+      <span>{value}</span>
+      <p>{detail}</p>
+    </article>
+  );
+}
+
+function StatusBadge({ state }: { state: "configured" | "missing" | "deferred" }) {
+  return <span className={`status-badge ${state}`}>{state}</span>;
 }
 
 function SubagentGroup({

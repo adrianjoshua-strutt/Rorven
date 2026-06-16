@@ -58,6 +58,39 @@ export type RunState = RunSummary & {
   events: EventRecord[];
 };
 
+export type SettingsSnapshot = {
+  credentials: {
+    id: string;
+    label: string;
+    adapter: string;
+    environment_variable: string;
+    configured: boolean;
+    raw_value_visible: boolean;
+    notes: string;
+  }[];
+  model_profiles: {
+    name: string;
+    adapter: string;
+    model_id: string;
+    model_id_configured: boolean;
+    request_timeout_seconds: number | null;
+    source: string;
+  }[];
+  runtime: {
+    active_runtime_adapter: string;
+    planned_runtime_adapter: string;
+    system_of_record: string;
+    planned_system_of_record: string;
+    data_dir: string;
+  };
+  frontend: {
+    framework: string;
+    design_system: string;
+    icon_system: string;
+    needs_design_system_migration: boolean;
+  };
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -78,6 +111,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function listProjects(): Promise<Project[]> {
   const payload = await request<{ projects: Project[] }>("/projects");
   return payload.projects;
+}
+
+export async function getSettings(): Promise<SettingsSnapshot> {
+  const payload = await request<{ settings: SettingsSnapshot }>("/settings");
+  return payload.settings;
 }
 
 export async function createProject(input: {
@@ -117,4 +155,3 @@ export async function workOnce(): Promise<Task[]> {
   });
   return payload.completed_tasks;
 }
-

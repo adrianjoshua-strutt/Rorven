@@ -13,6 +13,7 @@ from rorven.application.services import ProjectService, WorkerService
 
 @dataclass(frozen=True, slots=True)
 class LocalServices:
+    data_dir: Path
     store: LocalFilePlatformStore
     projects: ProjectService
     worker: WorkerService
@@ -23,8 +24,8 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
     store = LocalFilePlatformStore(root)
     runtime = LocalDeterministicRuntime(store)
     return LocalServices(
+        data_dir=root,
         store=store,
         projects=ProjectService(runs=store, events=store, tasks=store, runtime=runtime),
         worker=WorkerService(runs=store, tasks=store, artifacts=store, events=store),
     )
-
