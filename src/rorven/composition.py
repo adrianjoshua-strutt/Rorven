@@ -13,7 +13,7 @@ from rorven.adapters.model import (
     load_model_profile_config,
 )
 from rorven.adapters.persistence import LocalFilePlatformStore
-from rorven.adapters.runtime.local import LocalDeterministicRuntime
+from rorven.adapters.runtime import LangGraphAgentRuntime, LocalDeterministicRuntime
 from rorven.application.ports import ModelGateway
 from rorven.application.services import ProjectService, WorkerService
 from rorven.env import load_local_env
@@ -31,7 +31,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
     load_local_env()
     root = data_dir or _default_data_dir()
     store = LocalFilePlatformStore(root)
-    runtime = LocalDeterministicRuntime(store)
+    runtime = _create_runtime_adapter(store)
     model_gateway = _create_model_gateway()
     return LocalServices(
         data_dir=root,
@@ -70,4 +70,15 @@ def _create_model_gateway() -> ModelGateway:
         return OpenRouterModelGateway(api_key=api_key, profiles=profiles)
     raise RuntimeError(
         f"RORVEN_MODEL_GATEWAY={gateway_mode!r} requires {OPENROUTER_KEY_ENV} to be configured"
+    )
+
+
+def _create_runtime_adapter(store: LocalFilePlatformStore) -> LocalDeterministicRuntime | LangGraphAgentRuntime:
+    runtime_mode = os.environ.get("RORVEN_RUNTIME_ADAPTER", "langgraph").strip().lower()
+    if runtime_mode == "local-deterministic":
+        return LocalDeterministicRuntime(store)
+    if runtime_mode in {"langgraph", "auto"}:
+        return LangGraphAgentRuntime(store)
+    raise RuntimeError(
+        f"RORVEN_RUNTIME_ADAPTER={runtime_mode!r} must be 'langgraph' or 'local-deterministic'"
     )

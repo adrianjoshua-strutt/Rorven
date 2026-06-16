@@ -1,6 +1,6 @@
 # ADR 0003-langgraph-runtime-adapter: Use LangGraph only behind AgentRuntime
 
-Status: Proposed  
+Status: Accepted
 Date: 2026-06-16
 
 ## Context

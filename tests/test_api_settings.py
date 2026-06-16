@@ -36,6 +36,7 @@ class ApiSettingsTests(unittest.TestCase):
         payload = response.json()["settings"]
 
         self.assertNotIn("test-secret-that-must-not-leak", payload_text)
+        self.assertEqual("langgraph", payload["runtime"]["active_runtime_adapter"])
         self.assertTrue(payload["credentials"][0]["configured"])
         self.assertFalse(payload["credentials"][0]["raw_value_visible"])
         self.assertEqual("openrouter", payload["runtime"]["active_model_gateway"])

@@ -2,7 +2,7 @@
 
 Rorven is a self-hosted, durable, modular platform for long-running multi-agent project work.
 
-This repository currently contains the product and architecture foundation. The first implementation target is a durable walking skeleton: small enough to finish, but real enough to prove ports, adapters, persisted runs, worker recovery, migrations, and UI reconstruction.
+This repository currently contains the product and architecture foundation. The first implementation target is a durable walking skeleton that now uses a LangGraph-backed runtime adapter and a real OpenRouter model gateway: small enough to finish, but real enough to prove ports, adapters, persisted runs, worker recovery, migrations, and UI reconstruction.
 
 > Rorven is a provisional development name. It may be used for the public source repository, but no trademark exclusivity is claimed.
 

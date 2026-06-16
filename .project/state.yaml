@@ -16,7 +16,7 @@ current_decisions:
   database: postgresql
   runtime_abstraction: AgentRuntime
   initial_runtime_adapter: langgraph
-  walking_skeleton_runtime_adapter: local-deterministic
+  walking_skeleton_runtime_adapter: langgraph
   model_abstraction: ModelGateway
   initial_model_provider_adapter: openrouter
   model_profiles:

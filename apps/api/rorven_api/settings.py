@@ -14,6 +14,8 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
     api_key_configured = bool(os.environ.get(OPENROUTER_KEY_ENV))
     gateway_mode = os.environ.get("RORVEN_MODEL_GATEWAY", "auto").strip().lower()
     active_model_gateway = "openrouter" if api_key_configured and gateway_mode != "local" else "local"
+    runtime_mode = os.environ.get("RORVEN_RUNTIME_ADAPTER", "langgraph").strip().lower()
+    active_runtime_adapter = "local-deterministic" if runtime_mode == "local-deterministic" else "langgraph"
 
     return {
         "credentials": [
@@ -39,7 +41,7 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             for name in MODEL_PROFILE_NAMES
         ],
         "runtime": {
-            "active_runtime_adapter": "local-deterministic",
+            "active_runtime_adapter": active_runtime_adapter,
             "planned_runtime_adapter": "langgraph",
             "active_model_gateway": active_model_gateway,
             "system_of_record": "local-file-walking-skeleton",
