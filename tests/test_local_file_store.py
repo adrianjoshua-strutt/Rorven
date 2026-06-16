@@ -218,6 +218,58 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertIn("tool.requested", event_types)
         self.assertIn("tool.completed", event_types)
 
+    def test_child_agent_can_propose_file_write_without_applying_it(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-proposal-{uuid4()}"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+        store = LocalFilePlatformStore(root / "state")
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Propose README update."}]}',
+                (
+                    '{"action":"tool_calls","tool_calls":['
+                    '{"name":"workspace.propose_text_file_write",'
+                    '"input":{"path":"README.md","content":"After\\\\n"}}'
+                    "]} "
+                ),
+                '{"action":"final","content":"Proposed README update; not applied."}',
+                "Summary includes proposed diff.",
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
+        )
+
+        project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
+        run_state = projects.submit_task(project.id, "Prepare README change")
+
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        finished_state = projects.get_run_state(project.id, run_state.run.id)
+        artifact_text = "\n".join(finished_state.artifact_contents.values())
+
+        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+        self.assertIn("workspace.propose_text_file_write", artifact_text)
+        self.assertIn("--- a/README.md", artifact_text)
+        self.assertIn("+After", artifact_text)
+        self.assertIn('"applied": false', artifact_text)
+
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-order-{uuid4()}"
         root.mkdir(parents=True, exist_ok=True)

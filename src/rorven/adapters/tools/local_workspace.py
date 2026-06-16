@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from difflib import unified_diff
 import json
 from pathlib import Path
 from typing import Any
 
 from rorven.application.tools import (
     MAX_LIST_ENTRIES,
+    MAX_PROPOSED_TEXT_BYTES,
     MAX_READ_BYTES,
     ToolExecutionResult,
     ToolRequest,
@@ -44,6 +46,8 @@ class LocalWorkspaceToolBroker:
             return self._list_files(project, request)
         if request.name == "workspace.read_text_file":
             return self._read_text_file(project, request)
+        if request.name == "workspace.propose_text_file_write":
+            return self._propose_text_file_write(project, request)
         raise ValueError(f"unsupported tool: {request.name}")
 
     def _list_files(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
@@ -98,6 +102,46 @@ class LocalWorkspaceToolBroker:
                 "bytes_read": min(len(data), max_bytes),
                 "bytes_total": len(data),
                 "truncated": truncated,
+            },
+        )
+
+    def _propose_text_file_write(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
+        root = _workspace_root(project)
+        target = _resolve_inside(root, _input_path(request))
+        relative = target.relative_to(root)
+        if _is_sensitive(relative):
+            raise ValueError("path is blocked by secret-safety policy")
+        proposed = request.input.get("content")
+        if not isinstance(proposed, str):
+            raise ValueError("content must be a string")
+        proposed_bytes = proposed.encode("utf-8")
+        if len(proposed_bytes) > MAX_PROPOSED_TEXT_BYTES:
+            raise ValueError(f"content must be at most {MAX_PROPOSED_TEXT_BYTES} bytes")
+        if target.exists() and not target.is_file():
+            raise ValueError("workspace.propose_text_file_write requires a file path")
+        current = ""
+        existed = target.exists()
+        if existed:
+            current = target.read_bytes().decode("utf-8", errors="replace")
+        diff = "".join(
+            unified_diff(
+                current.splitlines(keepends=True),
+                proposed.splitlines(keepends=True),
+                fromfile=f"a/{relative.as_posix()}",
+                tofile=f"b/{relative.as_posix()}",
+            )
+        )
+        if not diff:
+            diff = f"No changes proposed for {relative.as_posix()}.\n"
+        return ToolExecutionResult(
+            content=diff,
+            metadata={
+                "tool": request.name,
+                "path": relative.as_posix(),
+                "proposal": "text-file-write",
+                "would_create": not existed,
+                "bytes_proposed": len(proposed_bytes),
+                "applied": False,
             },
         )
 

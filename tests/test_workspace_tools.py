@@ -53,6 +53,29 @@ class WorkspaceToolTests(unittest.TestCase):
                 ToolRequest("workspace.read_text_file", {"path": "../outside.txt"}),
             )
 
+    def test_local_workspace_broker_proposes_text_write_without_mutating_file(self) -> None:
+        project, child, _root = _project_and_agents()
+        workspace = Path(project.workspace.workspace_root)
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+
+        result = LocalWorkspaceToolBroker().execute(
+            project,
+            child,
+            ToolRequest(
+                "workspace.propose_text_file_write",
+                {"path": "README.md", "content": "After\n"},
+            ),
+        )
+
+        self.assertIn("--- a/README.md", result.content)
+        self.assertIn("+++ b/README.md", result.content)
+        self.assertIn("-Before", result.content)
+        self.assertIn("+After", result.content)
+        self.assertFalse(result.metadata["applied"])
+        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+
 
 def _project_and_agents() -> tuple[Project, AgentRun, AgentRun]:
     root = Path("test-output") / "tests" / f"workspace-tools-{uuid4()}"

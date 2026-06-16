@@ -323,7 +323,7 @@ class WorkerService:
             project_id=root.project_id,
             run_id=root.run_id,
             kind="text.orchestrator-dispatch",
-            name=f"orchestrator-dispatch-{root.id}.json",
+            name=f"dispatch-{root.id}.json",
             content=_format_model_response(response, decision.raw_content),
         )
         children: list[AgentRun] = []
@@ -347,7 +347,7 @@ class WorkerService:
                 project_id=root.project_id,
                 run_id=root.run_id,
                 kind="text.agent-assignment",
-                name=f"{dispatch.definition.name}-assignment-{root.id}.txt",
+                name=f"assign-{dispatch.definition.name}.txt",
                 content=dispatch.task,
             )
             child = AgentRun.create(

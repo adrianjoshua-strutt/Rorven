@@ -12,7 +12,10 @@ from rorven.domain import AgentRun, Project
 MAX_TOOL_CALLS = 3
 MAX_READ_BYTES = 20_000
 MAX_LIST_ENTRIES = 200
+MAX_PROPOSED_TEXT_BYTES = 40_000
 READ_ONLY_TOOLS = {"workspace.list_files", "workspace.read_text_file"}
+PROPOSAL_TOOLS = {"workspace.propose_text_file_write"}
+SUPPORTED_TOOLS = READ_ONLY_TOOLS | PROPOSAL_TOOLS
 SENSITIVE_PATH_MARKERS = (
     ".env",
     ".git",
@@ -71,7 +74,7 @@ class WorkspaceReadPolicy:
     ) -> ToolPolicyDecision:
         if agent_run.parent_agent_run_id is None:
             return ToolPolicyDecision(False, "root orchestrator cannot invoke workspace tools")
-        if request.name not in READ_ONLY_TOOLS:
+        if request.name not in SUPPORTED_TOOLS:
             return ToolPolicyDecision(False, f"unsupported tool: {request.name}")
         path = _tool_path(request)
         if _has_sensitive_path_marker(path):
@@ -84,6 +87,15 @@ class WorkspaceReadPolicy:
             max_entries = request.input.get("max_entries", MAX_LIST_ENTRIES)
             if not isinstance(max_entries, int) or max_entries < 1 or max_entries > MAX_LIST_ENTRIES:
                 return ToolPolicyDecision(False, f"max_entries must be between 1 and {MAX_LIST_ENTRIES}")
+        if request.name == "workspace.propose_text_file_write":
+            content = request.input.get("content")
+            if not isinstance(content, str):
+                return ToolPolicyDecision(False, "content must be a string")
+            if len(content.encode("utf-8")) > MAX_PROPOSED_TEXT_BYTES:
+                return ToolPolicyDecision(
+                    False,
+                    f"content must be at most {MAX_PROPOSED_TEXT_BYTES} bytes",
+                )
         return ToolPolicyDecision(True, "read-only workspace access allowed")
 
 
@@ -106,11 +118,15 @@ def agent_tool_contract() -> str:
         "To request tools, return exactly one JSON object and no prose outside it:\n"
         '{"action":"tool_calls","tool_calls":[{"name":"workspace.list_files",'
         '"input":{"path":".","max_entries":80}},{"name":"workspace.read_text_file",'
-        '"input":{"path":"README.md","max_bytes":6000}}]}\n\n'
-        "Allowed tools are workspace.list_files and workspace.read_text_file. "
-        "They are read-only, policy checked, audited, and cannot access obvious "
-        "secret paths such as .env, .git, key, token, or credential files. "
-        "Do not claim edits, shell commands, git actions, or browser access."
+        '"input":{"path":"README.md","max_bytes":6000}},'
+        '{"name":"workspace.propose_text_file_write","input":{"path":"README.md",'
+        '"content":"complete proposed file content"}}]}\n\n'
+        "Allowed tools are workspace.list_files, workspace.read_text_file, and "
+        "workspace.propose_text_file_write. The write tool only creates a persisted "
+        "diff proposal; it does not modify files. Tools are policy checked, audited, "
+        "and cannot access obvious secret paths such as .env, .git, key, token, or "
+        "credential files. Do not claim shell commands, git actions, browser access, "
+        "or applied file edits."
     )
 
 
