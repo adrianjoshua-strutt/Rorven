@@ -1,18 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity,
-  Boxes,
+  Bot,
   CheckCircle2,
   FolderPlus,
-  GitBranch,
+  MessageSquare,
   Play,
   RefreshCw,
-  Server,
-  TerminalSquare,
+  Send,
+  Sparkles,
+  User,
 } from "lucide-react";
 import {
   AgentRun,
+  EventRecord,
   Project,
   RunState,
   createProject,
@@ -25,11 +26,20 @@ import {
 import "./styles.css";
 
 type LoadState = "idle" | "loading" | "error";
+type ChatMessage = {
+  id: string;
+  side: "user" | "agent";
+  title: string;
+  body: string;
+  time: string;
+  status?: string;
+};
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunState | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [newProject, setNewProject] = useState({
@@ -37,12 +47,28 @@ function App() {
     allowed_root: "D:/Cloud/Dropbox/GitHub",
     workspace_root: "D:/Cloud/Dropbox/GitHub/rorven",
   });
-  const [command, setCommand] = useState("Build the next durable platform slice.");
+  const [message, setMessage] = useState("Build the next durable platform slice.");
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+
+  const agents = useMemo(
+    () =>
+      selectedRun?.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null) ?? [],
+    [selectedRun],
+  );
+
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null,
+    [agents, selectedAgentId],
+  );
+
+  const chatMessages = useMemo(() => buildProjectChat(selectedProject, selectedRun), [
+    selectedProject,
+    selectedRun,
+  ]);
 
   async function loadProjects() {
     setLoadState("loading");
@@ -50,8 +76,10 @@ function App() {
     try {
       const nextProjects = await listProjects();
       setProjects(nextProjects);
-      if (!selectedProjectId && nextProjects[0]) {
-        setSelectedProjectId(nextProjects[0].id);
+      const projectId = selectedProjectId ?? nextProjects[0]?.id ?? null;
+      setSelectedProjectId(projectId);
+      if (projectId) {
+        await refreshProject(projectId);
       }
       setLoadState("idle");
     } catch (caught) {
@@ -60,15 +88,18 @@ function App() {
     }
   }
 
-  async function refreshSelectedProject(projectId = selectedProjectId) {
+  async function refreshProject(projectId = selectedProjectId) {
     if (!projectId) return;
     const project = await getProject(projectId);
     setProjects((current) => [
       project,
       ...current.filter((candidate) => candidate.id !== project.id),
     ]);
-    if (!selectedRun && project.runs?.[0]) {
-      setSelectedRun(await getRun(project.id, project.runs[0].id));
+    const currentRunId = selectedRun?.id ?? project.runs?.[0]?.id;
+    if (currentRunId) {
+      const run = await getRun(project.id, currentRunId);
+      setSelectedRun(run);
+      setSelectedAgentId((current) => current ?? run.agent_runs[1]?.id ?? null);
     }
   }
 
@@ -80,21 +111,24 @@ function App() {
       setProjects((current) => [project, ...current]);
       setSelectedProjectId(project.id);
       setSelectedRun(null);
+      setSelectedAgentId(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to create project");
     }
   }
 
-  async function handleSubmitRun(event: React.FormEvent) {
+  async function handleSubmitMessage(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || !message.trim()) return;
     setError(null);
     try {
-      const run = await submitRun(selectedProjectId, command);
+      const run = await submitRun(selectedProjectId, message);
       setSelectedRun(run);
-      await refreshSelectedProject(selectedProjectId);
+      setSelectedAgentId(run.agent_runs[1]?.id ?? null);
+      setMessage("");
+      await refreshProject(selectedProjectId);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to submit run");
+      setError(caught instanceof Error ? caught.message : "Unable to send message");
     }
   }
 
@@ -103,8 +137,9 @@ function App() {
     setError(null);
     try {
       await workOnce();
-      setSelectedRun(await getRun(selectedProjectId, selectedRun.id));
-      await refreshSelectedProject(selectedProjectId);
+      const run = await getRun(selectedProjectId, selectedRun.id);
+      setSelectedRun(run);
+      await refreshProject(selectedProjectId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to run worker");
     }
@@ -115,37 +150,24 @@ function App() {
   }, []);
 
   return (
-    <main className="shell">
-      <aside className="sidebar">
+    <main className="app-shell">
+      <aside className="projects-pane">
         <div className="brand">
           <div className="brand-mark">
-            <Boxes size={22} aria-hidden="true" />
+            <Sparkles size={20} aria-hidden="true" />
           </div>
           <div>
             <strong>Rorven</strong>
-            <span>Console</span>
+            <span>Projects</span>
           </div>
         </div>
 
-        <form className="panel compact-form" onSubmit={handleCreateProject}>
-          <div className="panel-title">
-            <FolderPlus size={16} aria-hidden="true" />
-            <span>Project</span>
-          </div>
+        <form className="new-project" onSubmit={handleCreateProject}>
           <label>
             <span>Name</span>
             <input
               value={newProject.name}
               onChange={(event) => setNewProject({ ...newProject, name: event.target.value })}
-            />
-          </label>
-          <label>
-            <span>Allowed root</span>
-            <input
-              value={newProject.allowed_root}
-              onChange={(event) =>
-                setNewProject({ ...newProject, allowed_root: event.target.value })
-              }
             />
           </label>
           <label>
@@ -157,191 +179,239 @@ function App() {
               }
             />
           </label>
-          <button className="primary" type="submit">
+          <label>
+            <span>Allowed root</span>
+            <input
+              value={newProject.allowed_root}
+              onChange={(event) =>
+                setNewProject({ ...newProject, allowed_root: event.target.value })
+              }
+            />
+          </label>
+          <button className="primary-button" type="submit">
             <FolderPlus size={16} aria-hidden="true" />
-            Create project
+            New project
           </button>
         </form>
 
-        <section className="project-list" aria-label="Projects">
+        <nav className="project-list" aria-label="Projects">
           {projects.map((project) => (
             <button
               key={project.id}
-              className={project.id === selectedProjectId ? "project selected" : "project"}
+              className={project.id === selectedProjectId ? "project-card active" : "project-card"}
               onClick={async () => {
                 setSelectedProjectId(project.id);
                 setSelectedRun(null);
-                await refreshSelectedProject(project.id);
+                setSelectedAgentId(null);
+                await refreshProject(project.id);
               }}
               type="button"
             >
               <strong>{project.name}</strong>
-              <span>{project.workspace.workspace_root}</span>
+              <span>{project.runs?.length ?? 0} conversations</span>
             </button>
           ))}
-        </section>
+        </nav>
       </aside>
 
-      <section className="workspace">
-        <header className="topbar">
+      <section className="chat-pane">
+        <header className="chat-header">
           <div>
-            <p className="eyebrow">Durable workbench</p>
-            <h1>{selectedProject?.name ?? "No project selected"}</h1>
+            <p>{selectedProject?.workspace.workspace_root ?? "No workspace selected"}</p>
+            <h1>{selectedProject?.name ?? "Choose a project"}</h1>
           </div>
-          <div className="topbar-actions">
-            <button className="ghost" onClick={() => void loadProjects()} type="button">
-              <RefreshCw size={16} aria-hidden="true" />
-              Refresh
-            </button>
-            <button
-              className="primary"
-              disabled={!selectedRun}
-              onClick={() => void handleWorkOnce()}
-              type="button"
-            >
-              <Play size={16} aria-hidden="true" />
-              Work once
-            </button>
-          </div>
+          <button className="icon-button" onClick={() => void loadProjects()} type="button">
+            <RefreshCw size={16} aria-hidden="true" />
+            Refresh
+          </button>
         </header>
 
-        {error ? <div className="error">{error}</div> : null}
-        {loadState === "loading" ? <div className="muted-row">Loading state...</div> : null}
+        {error ? <div className="error-banner">{error}</div> : null}
+        {loadState === "loading" ? <div className="quiet-note">Loading projects...</div> : null}
 
-        <div className="content-grid">
-          <section className="panel run-command">
-            <div className="panel-title">
-              <TerminalSquare size={16} aria-hidden="true" />
-              <span>Run command</span>
+        <div className="message-list" aria-label="Project conversation">
+          {chatMessages.length > 0 ? (
+            chatMessages.map((item) => <ChatBubble item={item} key={item.id} />)
+          ) : (
+            <div className="empty-chat">
+              <MessageSquare size={28} aria-hidden="true" />
+              <strong>Start with a project message.</strong>
+              <span>The orchestrator will create child agents and their work appears on the right.</span>
             </div>
-            <form onSubmit={handleSubmitRun}>
-              <textarea
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                rows={4}
-              />
-              <button className="primary" disabled={!selectedProjectId} type="submit">
-                <Play size={16} aria-hidden="true" />
-                Submit run
-              </button>
-            </form>
-          </section>
-
-          <section className="panel status-panel">
-            <div className="panel-title">
-              <Server size={16} aria-hidden="true" />
-              <span>Project runs</span>
-            </div>
-            <div className="run-list">
-              {selectedProject?.runs?.map((run) => (
-                <button
-                  className={selectedRun?.id === run.id ? "run-row selected" : "run-row"}
-                  key={run.id}
-                  onClick={async () => {
-                    if (!selectedProjectId) return;
-                    setSelectedRun(await getRun(selectedProjectId, run.id));
-                  }}
-                  type="button"
-                >
-                  <span>{run.command}</span>
-                  <StatusPill status={run.status} />
-                </button>
-              ))}
-            </div>
-          </section>
+          )}
         </div>
 
-        <section className="panel run-tree-panel">
-          <div className="panel-title">
-            <GitBranch size={16} aria-hidden="true" />
-            <span>Run tree</span>
-          </div>
-          {selectedRun ? <RunTree run={selectedRun} /> : <EmptyRunTree />}
-        </section>
-
-        <div className="content-grid lower">
-          <section className="panel">
-            <div className="panel-title">
-              <CheckCircle2 size={16} aria-hidden="true" />
-              <span>Tasks</span>
-            </div>
-            <div className="task-table">
-              {selectedRun?.tasks.map((task) => (
-                <div className="task-row" key={task.id}>
-                  <code>{task.id.slice(0, 8)}</code>
-                  <span>{task.agent_run_id.slice(0, 8)}</span>
-                  <StatusPill status={task.status} />
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-title">
-              <Activity size={16} aria-hidden="true" />
-              <span>Events</span>
-            </div>
-            <div className="event-stream">
-              {selectedRun?.events.slice(-10).map((event) => (
-                <div className="event-row" key={event.id}>
-                  <span>{event.type}</span>
-                  <time>{new Date(event.occurred_at).toLocaleTimeString()}</time>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
+        <form className="composer" onSubmit={handleSubmitMessage}>
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Tell the orchestrator what to do..."
+            rows={3}
+          />
+          <button className="send-button" disabled={!selectedProjectId} type="submit">
+            <Send size={16} aria-hidden="true" />
+            Send
+          </button>
+        </form>
       </section>
+
+      <aside className="agents-pane">
+        <div className="agents-header">
+          <div>
+            <p>Spawned agents</p>
+            <h2>{agents.length ? `${agents.length} active agents` : "No agents yet"}</h2>
+          </div>
+          <button
+            className="primary-button"
+            disabled={!selectedRun}
+            onClick={() => void handleWorkOnce()}
+            type="button"
+          >
+            <Play size={16} aria-hidden="true" />
+            Work once
+          </button>
+        </div>
+
+        <div className="agent-list">
+          {agents.map((agent) => (
+            <button
+              className={agent.id === selectedAgent?.id ? "agent-card active" : "agent-card"}
+              key={agent.id}
+              onClick={() => setSelectedAgentId(agent.id)}
+              type="button"
+            >
+              <div className="agent-avatar">
+                <Bot size={17} aria-hidden="true" />
+              </div>
+              <div>
+                <strong>{agent.definition.name}</strong>
+                <span>{agent.definition.model_profile}</span>
+              </div>
+              <StatusPill status={agent.status} />
+            </button>
+          ))}
+        </div>
+
+        <section className="agent-detail" aria-label="Agent work">
+          {selectedAgent && selectedRun ? (
+            <AgentTranscript agent={selectedAgent} events={selectedRun.events} />
+          ) : (
+            <div className="empty-agent">
+              <Bot size={28} aria-hidden="true" />
+              <strong>No agent selected.</strong>
+              <span>Send a message to spawn work.</span>
+            </div>
+          )}
+        </section>
+      </aside>
     </main>
   );
 }
 
-function RunTree({ run }: { run: RunState }) {
-  const root = run.agent_runs.find((agentRun) => agentRun.parent_agent_run_id === null);
-  const children = run.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null);
+function ChatBubble({ item }: { item: ChatMessage }) {
   return (
-    <div className="run-tree">
-      <div className="root-run">
-        <AgentRunNode agentRun={root} fallbackLabel={run.command} />
+    <article className={`chat-bubble ${item.side}`}>
+      <div className="bubble-icon">
+        {item.side === "user" ? <User size={16} aria-hidden="true" /> : <Bot size={16} aria-hidden="true" />}
       </div>
-      <div className="branch-line" />
-      <div className="child-runs">
-        {children.map((agentRun) => (
-          <AgentRunNode agentRun={agentRun} key={agentRun.id} />
+      <div className="bubble-body">
+        <div className="bubble-meta">
+          <strong>{item.title}</strong>
+          <time>{new Date(item.time).toLocaleTimeString()}</time>
+        </div>
+        <p>{item.body}</p>
+        {item.status ? <StatusPill status={item.status} /> : null}
+      </div>
+    </article>
+  );
+}
+
+function AgentTranscript({ agent, events }: { agent: AgentRun; events: EventRecord[] }) {
+  const agentEvents = events.filter((event) => JSON.stringify(event.payload).includes(agent.id));
+  return (
+    <>
+      <div className="agent-detail-header">
+        <div className="agent-avatar large">
+          <Bot size={20} aria-hidden="true" />
+        </div>
+        <div>
+          <h3>{agent.definition.name}</h3>
+          <p>
+            v{agent.definition.version} / {agent.definition.model_profile}
+          </p>
+        </div>
+        <StatusPill status={agent.status} />
+      </div>
+
+      <div className="agent-thread">
+        <div className="agent-message">
+          <strong>Assigned</strong>
+          <p>This agent was spawned by the orchestrator for the selected project request.</p>
+        </div>
+        {agentEvents.map((event) => (
+          <div className="agent-message" key={event.id}>
+            <strong>{event.type}</strong>
+            <p>{eventSummary(event)}</p>
+          </div>
         ))}
+        {agent.result_artifact_id ? (
+          <div className="agent-message done">
+            <CheckCircle2 size={16} aria-hidden="true" />
+            <p>Result artifact {agent.result_artifact_id.slice(0, 8)} is ready.</p>
+          </div>
+        ) : null}
       </div>
-    </div>
+    </>
   );
-}
-
-function AgentRunNode({
-  agentRun,
-  fallbackLabel,
-}: {
-  agentRun?: AgentRun;
-  fallbackLabel?: string;
-}) {
-  if (!agentRun) {
-    return <div className="agent-node muted-node">{fallbackLabel ?? "Run pending"}</div>;
-  }
-  return (
-    <div className="agent-node">
-      <div>
-        <strong>{agentRun.definition.name}</strong>
-        <span>v{agentRun.definition.version}</span>
-      </div>
-      <StatusPill status={agentRun.status} />
-      <code>{agentRun.definition.model_profile}</code>
-    </div>
-  );
-}
-
-function EmptyRunTree() {
-  return <div className="empty-state">No run selected.</div>;
 }
 
 function StatusPill({ status }: { status: string }) {
-  return <span className={`status ${status}`}>{status}</span>;
+  return <span className={`status-pill ${status}`}>{status}</span>;
+}
+
+function buildProjectChat(project: Project | null, run: RunState | null): ChatMessage[] {
+  if (!project || !run) return [];
+  const root = run.agent_runs.find((agentRun) => agentRun.parent_agent_run_id === null);
+  const childAgents = run.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null);
+  return [
+    {
+      id: `${run.id}-user`,
+      side: "user",
+      title: "You",
+      body: run.command,
+      time: run.created_at,
+      status: run.status,
+    },
+    {
+      id: `${run.id}-orchestrator`,
+      side: "agent",
+      title: root?.definition.name ?? "orchestrator",
+      body: childAgents.length
+        ? `I spawned ${childAgents.map((agent) => agent.definition.name).join(" and ")} for this request.`
+        : "I am preparing the work plan.",
+      time: root?.created_at ?? run.created_at,
+      status: root?.status ?? run.status,
+    },
+    ...childAgents.map((agent) => ({
+      id: agent.id,
+      side: "agent" as const,
+      title: agent.definition.name,
+      body:
+        agent.status === "completed"
+          ? "I finished my assigned work and attached a result."
+          : "I am queued for worker execution.",
+      time: agent.created_at,
+      status: agent.status,
+    })),
+  ];
+}
+
+function eventSummary(event: EventRecord) {
+  if (event.type === "run.completed") return "Completed work for this run.";
+  if (event.type === "run.queued") return "Queued for worker execution.";
+  if (event.type === "task.leased") return "A worker picked up this task.";
+  if (event.type === "task.completed") return "The task was marked complete.";
+  return JSON.stringify(event.payload);
 }
 
 createRoot(document.getElementById("root")!).render(
