@@ -1,12 +1,13 @@
 milestones:
   - id: M1
-    name: Durable walking skeleton
+    name: Durable project execution
     status: active
     outcomes:
       - accepted first-slice ADR set
       - stable first-slice ports and module boundaries
       - project creation and workspace binding
-      - durable parent and child run records
+      - durable project run records
+      - root orchestrator task execution
       - worker leasing and recovery
       - reloadable run tree UI
       - automatic startup migration skeleton

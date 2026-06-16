@@ -31,10 +31,14 @@ OpenRouter chat-completions adapter. Local API and worker processes load
 The key is used only by the adapter and is not returned through settings, events,
 artifacts, prompts, or UI state.
 
-When the key is absent, the composition root selects a local gateway so durability
-and UI reconstruction remain testable. When the key is present and
-`RORVEN_MODEL_GATEWAY` is `auto` or `openrouter`, workers use OpenRouter for
-subagent result generation and orchestrator summaries.
+When the key is absent, the composition root refuses to create the model gateway.
+Tests that need deterministic responses patch the OpenRouter adapter or inject a
+test gateway directly into application services; no local product gateway is
+registered in composition.
+
+When the key is present and `RORVEN_MODEL_GATEWAY` is `auto` or `openrouter`,
+root orchestrator messages and project worker tasks use OpenRouter for model
+responses.
 
 ## Profile versioning
 
@@ -69,7 +73,7 @@ The settings API must not place raw provider credentials in responses. Agent def
 
 ## Current limitation
 
-The first model-backed worker slice has no brokered filesystem, shell, memory, or
-sandbox tools. Model-backed subagents produce persisted text artifacts and
-orchestrator summaries; they must not claim they edited files or ran commands until
-the tool-broker and sandbox slices exist.
+The first model-backed worker slice has no brokered filesystem, shell, memory,
+sandbox tools, or explicit subagent dispatch. Model-backed project orchestrator
+tasks produce persisted text artifacts; they must not claim they edited files or
+ran commands until the tool-broker and sandbox slices exist.

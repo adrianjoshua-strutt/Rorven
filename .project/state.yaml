@@ -5,8 +5,8 @@ project_phase: foundation
 status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
-active_feature: 0001-foundation
-last_verified_commit: master
+active_feature: 0002-real-project-execution
+last_verified_commit: 597486a
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -16,7 +16,7 @@ current_decisions:
   database: postgresql
   runtime_abstraction: AgentRuntime
   initial_runtime_adapter: langgraph
-  walking_skeleton_runtime_adapter: langgraph
+  first_execution_runtime_adapter: langgraph
   model_abstraction: ModelGateway
   initial_model_provider_adapter: openrouter
   active_model_provider: openrouter
@@ -48,7 +48,7 @@ next_required_gates:
   - adr-review-for-first-slice
   - module-map-for-first-slice
   - migration-skeleton-plan
-  - validation-plan-for-walking-skeleton
+  - validation-plan-for-real-execution
   - postgres-repository-slice
   - tool-broker-and-sandbox-slice
 known_issues:
@@ -60,17 +60,25 @@ known_issues:
       duplicate workspace_root), but the existing data has duplicates.
     remediation: Manual cleanup of .rorven/state.json or a migration pass.
   - id: I-002
-    title: project chat submit persists run but does not execute agent
+    title: explicit subagent dispatch is not implemented
     description: >
-      Submitting a message to a project creates a Run and parent AgentRun record
-      (orchestrator, status=queued) but no real agent work is performed.
-      The walking skeleton has no worker executing tasks yet.
-    remediation: Implement worker task execution loop (M1 outcome).
+      Project messages now queue and execute the root orchestrator task through
+      the model gateway, but the orchestrator cannot yet dispatch real child
+      agents. The previous hardcoded reviewer/implementer path was removed.
+    remediation: Add a durable orchestrator dispatch contract, policy checks,
+      child task creation, and worker join handling.
   - id: I-003
-    title: plan_child_runs intentionally returns empty list
+    title: local file persistence remains the temporary system of record
     description: >
-      Child agent run creation was previously mocked with hardcoded reviewer and
-      implementer runs. The mock was removed. Real child run dispatch requires
-      the worker execution loop from I-002.
-    remediation: Implement real child dispatch in worker loop.
+      The API and worker persist projects, runs, tasks, artifacts, settings, and
+      root messages to state.json. The product target remains Postgres.
+    remediation: Implement the Postgres repository slice with startup migration
+      tests before claiming production persistence.
+  - id: I-004
+    title: no brokered tools or sandbox authority
+    description: >
+      Model-backed workers can produce text artifacts only. They cannot inspect,
+      edit, execute, or commit project files through controlled tools yet.
+    remediation: Implement tool broker, permission policy, sandbox adapter, and
+      audit trail before allowing code-changing claims.
 last_updated: '2026-06-16'

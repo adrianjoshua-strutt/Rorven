@@ -14,7 +14,7 @@ risks:
   - id: R-004
     title: Over-abstraction before first working slice
     severity: medium
-    mitigation: define only ports required by the durable walking skeleton
+    mitigation: define only ports required by the current real execution slice
   - id: R-005
     title: Agent prompt and workflow drift
     severity: high
@@ -42,7 +42,7 @@ risks:
   - id: R-011
     title: First slice becomes either overbuilt or throwaway
     severity: high
-    mitigation: implement a durable walking skeleton with real ports, persisted state, recovery tests, and deferred provider adapters
+    mitigation: implement durable project execution with real ports, persisted state, recovery tests, and no product mock adapters
   - id: R-012
     title: Console UI drifts away from the product mental model
     severity: high

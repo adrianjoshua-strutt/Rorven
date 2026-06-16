@@ -2,7 +2,7 @@
 
 Rorven is a self-hosted, durable, modular platform for long-running multi-agent project work.
 
-This repository currently contains the product and architecture foundation. The first implementation target is a durable walking skeleton that now uses a LangGraph-backed runtime adapter and a real OpenRouter model gateway: small enough to finish, but real enough to prove ports, adapters, persisted runs, worker recovery, migrations, and UI reconstruction.
+This repository contains the product and architecture foundation plus the first real execution slice: project messages create durable orchestrator work, workers call the configured OpenRouter model gateway, and results are persisted back into the project run.
 
 > Rorven is a provisional development name. It may be used for the public source repository, but no trademark exclusivity is claimed.
 
@@ -17,7 +17,7 @@ This repository currently contains the product and architecture foundation. The 
 7. `docs/product/identity.md`
 8. `docs/architecture/README.md`
 9. `docs/architecture/evolution-and-migrations.md`
-10. `specs/0001-foundation/spec.md`
+10. `specs/0002-real-project-execution/spec.md`
 
 ## Core idea
 
@@ -53,13 +53,13 @@ RORVEN_MODEL_PROFILE_REASONING=provider/model-id
 ```
 
 If no profile model is pinned, the OpenRouter adapter omits `model` and lets the
-provider route the request. Without `RORVEN_OPENROUTER_API_KEY`, Rorven uses the local
-model gateway so the durable worker path can still be tested without external calls.
+provider route the request. Without `RORVEN_OPENROUTER_API_KEY`, the API and worker
+refuse to start the model gateway.
 
-The current worker creates durable subagent runs, calls the configured model gateway,
-stores the returned text as artifacts, and exposes that text in the console when a
-subagent is selected. This is not yet a tool-capable coding agent: filesystem, shell,
-sandbox, memory, and brokered tool execution are separate slices.
+The current worker executes durable project-orchestrator tasks, stores the returned
+text as artifacts, and exposes that text in the console. This is not yet a
+tool-capable coding agent: explicit subagent dispatch, filesystem, shell, sandbox,
+memory, and brokered tool execution are separate slices.
 
 Local development uses three processes:
 
