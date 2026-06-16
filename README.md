@@ -2,7 +2,7 @@
 
 Rorven is a self-hosted, durable, modular platform for long-running multi-agent project work.
 
-This repository currently contains the product and architecture foundation. Implementation should begin only after the foundation specification and architecture decisions are reviewed.
+This repository currently contains the product and architecture foundation. The first implementation target is a durable walking skeleton: small enough to finish, but real enough to prove ports, adapters, persisted runs, worker recovery, migrations, and UI reconstruction.
 
 > Rorven is a provisional development name. It may be used for the public source repository, but no trademark exclusivity is claimed.
 
@@ -38,7 +38,7 @@ The system targets one current canonical model. Updates migrate first-party data
 
 ## Bootstrap with Codex
 
-Open this folder in VS Code and give Codex the prompt in `CODEX_BOOTSTRAP_PROMPT.md`.
+Open this folder in VS Code and give Codex the prompt in `CODEX_BOOTSTRAP_PROMPT.md`. Agents should work in small validated steps, update the active feature evidence, and preserve the adapter boundaries rather than wiring providers directly into core code.
 
 ## Product identity
 

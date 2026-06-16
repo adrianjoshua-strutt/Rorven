@@ -10,12 +10,16 @@ React project page
 -> migration preflight and current PostgreSQL schema
 -> PostgreSQL run and task records
 -> AgentRuntime adapter
--> parent orchestrator
--> two durable child runs
+-> deterministic parent orchestrator
+-> two durable local child runs
 -> persisted join
 -> final artifact
 -> live and reloadable UI state
 ```
+
+This is a walking skeleton, not a throwaway proof of concept. It must use the same module boundaries, ports, repository interfaces, run/event model, task leases, and validation habits that later LangGraph/OpenRouter-backed agents will use.
+
+The first runtime adapter may be local and deterministic so durability, recovery, project isolation, and UI reconstruction can be proven before model/provider behavior is introduced. LangGraph and OpenRouter stay behind accepted adapter decisions and are implemented in later slices.
 
 ## Required ports
 
@@ -23,29 +27,46 @@ React project page
 - EventRepository
 - TaskQueue
 - AgentRuntime
-- ModelGateway
-- ModelProvider
 - ArtifactStore
 - Clock
+
+## Deferred ports
+
+These remain part of the architecture but are not required for the first executable slice:
+
+- ModelGateway
+- ModelProvider
+- MemoryBackend
+- SecretStore
+- CredentialBroker
+- PermissionEngine
+- SandboxProvider
 
 ## Required adapters
 
 - PostgreSQL migration coordinator, repositories, and queue
-- LangGraph runtime
-- OpenRouter model provider
+- local deterministic runtime adapter
 - local filesystem artifact store
 - system clock
+
+## Deferred adapters
+
+- LangGraph runtime
+- OpenRouter model provider
+- PostgreSQL memory backend
+- secret-store adapter
+- Docker sandbox adapter
 
 ## Required tests
 
 - architecture import tests
-- shared runtime adapter contract
-- shared model-provider contract
+- shared runtime adapter contract for the local adapter
+- shared task queue behavior tests
 - API integration test
 - parallel child-run test
 - API restart test
 - worker lease-recovery test
-- duplicate-side-effect protection test using a synthetic tool
+- duplicate-result protection test using synthetic child work
 - UI reload reconstruction test
 - clean-start and previous-schema automatic migration tests
-- migration lock and failed-migration readiness tests
+- migration readiness test

@@ -1,26 +1,25 @@
 milestones:
   - id: M1
-    name: Foundation and architecture
+    name: Durable walking skeleton
     status: active
     outcomes:
-      - approved constitution
-      - accepted initial ADR set
-      - stable ports and module boundaries
-      - threat model
-      - test strategy
-      - migration-first evolution architecture
-      - automatic startup migration plan
+      - accepted first-slice ADR set
+      - stable first-slice ports and module boundaries
+      - project creation and workspace binding
+      - durable parent and child run records
+      - worker leasing and recovery
+      - reloadable run tree UI
+      - automatic startup migration skeleton
 
   - id: M2
-    name: Durable vertical slice
+    name: Provider-backed agent runtime
     status: planned
     outcomes:
-      - create project and bind workspace
-      - chat with main orchestrator
-      - spawn two parallel subagents
-      - persist state and events
-      - survive API and worker restart
-      - resume after interruption
+      - LangGraph runtime adapter
+      - OpenRouter model-provider adapter
+      - model-profile resolution and usage recording
+      - runtime adapter contract tests
+      - model-provider contract tests
 
   - id: M3
     name: Security and controlled execution

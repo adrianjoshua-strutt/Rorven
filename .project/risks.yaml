@@ -14,7 +14,7 @@ risks:
   - id: R-004
     title: Over-abstraction before first working slice
     severity: medium
-    mitigation: define only ports required by the first vertical slice
+    mitigation: define only ports required by the durable walking skeleton
   - id: R-005
     title: Agent prompt and workflow drift
     severity: high
@@ -39,3 +39,7 @@ risks:
     title: Provisional product name later requires replacement
     severity: low
     mitigation: centralize identity metadata and keep branding out of domain, persistence, event, and API contracts
+  - id: R-011
+    title: First slice becomes either overbuilt or throwaway
+    severity: high
+    mitigation: implement a durable walking skeleton with real ports, persisted state, recovery tests, and deferred provider adapters

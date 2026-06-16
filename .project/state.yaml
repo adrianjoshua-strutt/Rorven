@@ -4,7 +4,7 @@ product_naming_status: provisional-public-project-name
 project_phase: foundation
 status: planning
 constitution_version: 1.1.0
-active_milestone: M1-foundation-and-vertical-slice
+active_milestone: M1-durable-walking-skeleton
 active_feature: 0001-foundation
 last_verified_commit: null
 implementation_started: false
@@ -34,9 +34,8 @@ current_decisions:
   compatibility_policy: exceptional-adr-required
   startup_migrations: automatic-and-blocking
 next_required_gates:
-  - constitution-approval
-  - adr-review
-  - threat-model-review
-  - migration-architecture-review
-  - vertical-slice-plan-approval
+  - adr-review-for-first-slice
+  - module-map-for-first-slice
+  - migration-skeleton-plan
+  - validation-plan-for-walking-skeleton
 last_updated: '2026-06-16'

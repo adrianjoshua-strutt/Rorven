@@ -4,6 +4,8 @@
 
 LangGraph is an implementation detail behind `AgentRuntime`. The platform owns run IDs, agent-run IDs, parent-child relationships, task records, events, budgets, approvals, and artifacts.
 
+The first walking skeleton may use a local deterministic `AgentRuntime` adapter. That adapter is not a shortcut around the architecture; it exists to prove platform-owned durability, worker leasing, parent-child joins, and UI reconstruction before model-provider behavior is introduced.
+
 ## Parent-child execution
 
 Each spawned agent creates a durable `agent_run` record before execution begins.

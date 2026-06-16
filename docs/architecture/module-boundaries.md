@@ -59,9 +59,17 @@ adapters/
 
 ## Ports
 
-Initial ports:
+First-slice ports:
 
 - `AgentRuntime`
+- `ArtifactStore`
+- `RunRepository`
+- `EventRepository`
+- `TaskQueue`
+- `Clock`
+
+Planned platform ports:
+
 - `ModelGateway`
 - `ModelProvider`
 - `MemoryBackend`
@@ -70,10 +78,5 @@ Initial ports:
 - `PermissionEngine`
 - `ToolExecutor`
 - `SandboxProvider`
-- `ArtifactStore`
-- `RunRepository`
-- `EventRepository`
-- `TaskQueue`
-- `Clock`
 
 Ports should remain small. Provider-specific optional features use capability interfaces rather than widening every implementation.

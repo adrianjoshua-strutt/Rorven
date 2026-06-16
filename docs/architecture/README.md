@@ -28,6 +28,8 @@ The system is a modular monolith using ports and adapters.
 - Event transport
 - Scheduler and task queue implementation
 
+The first implementation slice should exercise real ports and adapters without requiring every planned subsystem to be production-ready. Deferred adapters stay behind the same boundaries and are added when their feature slice needs them.
+
 ## Initial process topology
 
 - `web`: React/Vite static application
