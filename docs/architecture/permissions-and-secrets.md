@@ -64,3 +64,7 @@ Agent -> Tool Broker -> Permission Engine -> Credential Broker -> Tool Adapter -
 ## Redaction
 
 Central redaction is mandatory for tool outputs, exceptions, logs, events, and traces. Redaction is a defense-in-depth control and not a substitute for avoiding disclosure.
+
+## Settings visibility
+
+The settings surface may report whether a required credential binding or environment-backed secret is configured. It must not return raw secret material, masked fragments, prompt-ready credential text, or values that could be copied into an agent message.

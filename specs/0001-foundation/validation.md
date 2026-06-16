@@ -12,7 +12,7 @@ Status: In progress
 - [x] UI reload reconstruction verified.
 - [x] Architecture boundaries verified.
 - [x] Model-profile-only agent definitions verified.
-- [ ] No raw secret persistence verified.
+- [x] No raw secret persistence verified.
 - [ ] Clean bootstrap migration verified.
 - [ ] Synthetic previous-schema migration verified.
 
@@ -40,6 +40,10 @@ Status: In progress
 - `89d4ebf` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after making root project selectable, stabilizing project selection, and presenting subagent work as a chat-like transcript view.
 - `89d4ebf` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - `89d4ebf` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
+- `242944a` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 10 tests passed after adding the settings metadata endpoint and a credential non-disclosure check.
+- `242944a` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after replacing the settings modal with a first-class settings surface.
+- `242944a` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Verified `/settings` reports OpenRouter credential presence without returning the raw `RORVEN_OPENROUTER_API_KEY` value.
 
 ## Known deferred evidence
 

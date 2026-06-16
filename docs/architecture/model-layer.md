@@ -49,3 +49,9 @@ Profiles are immutable once used. Each run records:
 ## Overrides
 
 Global defaults may be overridden per project. The agent still requests the same profile name.
+
+## Settings visibility
+
+The console may expose model-profile configuration status in the settings surface so an operator can see whether each approved profile is mapped. This is control-plane configuration metadata, not an agent, workflow, run, or memory contract.
+
+The settings API must not place raw provider credentials in responses. Agent definitions and run records continue to store profile names only.

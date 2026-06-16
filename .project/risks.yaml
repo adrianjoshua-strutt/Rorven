@@ -43,3 +43,7 @@ risks:
     title: First slice becomes either overbuilt or throwaway
     severity: high
     mitigation: implement a durable walking skeleton with real ports, persisted state, recovery tests, and deferred provider adapters
+  - id: R-012
+    title: Console UI drifts away from the product mental model
+    severity: high
+    mitigation: keep root, project, subagent, and settings surfaces explicit; migrate from hand-rolled CSS to a chosen design system in a dedicated frontend slice
