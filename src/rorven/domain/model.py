@@ -62,6 +62,7 @@ class EventType(StrEnum):
     TASK_LEASED = "task.leased"
     TASK_COMPLETED = "task.completed"
     ARTIFACT_CREATED = "artifact.created"
+    AGENT_DISPATCHED = "agent.dispatched"
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +169,7 @@ class AgentRun:
         project_id: str,
         definition: AgentDefinitionRef,
         parent_agent_run_id: str | None = None,
+        input_artifact_id: str | None = None,
     ) -> AgentRun:
         return cls(
             id=new_id(),
@@ -176,6 +178,7 @@ class AgentRun:
             parent_agent_run_id=parent_agent_run_id,
             definition=definition,
             status=RunStatus.CREATED,
+            input_artifact_id=input_artifact_id,
         )
 
     def transition(

@@ -35,6 +35,7 @@ class RunRepository(Protocol):
 
     def add_child_runs(
         self,
+        run: Run,
         parent_agent_run: AgentRun,
         child_agent_runs: Sequence[AgentRun],
         tasks: Sequence[Task],

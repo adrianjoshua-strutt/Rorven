@@ -26,7 +26,8 @@ def agent_system_prompt(agent_name: str) -> str:
     )
 
 
-def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun) -> str:
+def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun, assignment: str | None = None) -> str:
+    task_text = assignment or run.command
     return (
         f"Project: {project.name}\n"
         f"Workspace root: {project.workspace.workspace_root}\n"
@@ -35,6 +36,7 @@ def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun) -> str:
         f"Agent: {agent_run.definition.name}@{agent_run.definition.version}\n"
         f"Model profile: {agent_run.definition.model_profile.value}\n\n"
         f"User request:\n{run.command}\n\n"
+        f"Assigned task:\n{task_text}\n\n"
         "Return useful work product for the project orchestrator. Keep it structured and "
         "specific. If execution tools are required, state exactly what should be run next."
     )

@@ -10,7 +10,12 @@ from rorven.application.agent_prompts import (
     agent_task_prompt,
     orchestrator_summary_prompt,
 )
-from rorven.application.modeling import ModelMessage, ModelRequest
+from rorven.application.dispatching import (
+    OrchestratorDecision,
+    orchestrator_dispatch_contract,
+    parse_orchestrator_decision,
+)
+from rorven.application.modeling import ModelMessage, ModelRequest, ModelResponse
 from rorven.application.ports import ArtifactStore, EventRepository, ModelGateway, RunRepository, TaskQueue
 from rorven.domain import AgentRun, ArtifactMetadata, Event, EventType, ModelProfile, RunStatus, Task
 
@@ -36,7 +41,12 @@ class WorkerService:
         for task in leased:
             agent_run = self._runs.get_agent_run(task.agent_run_id)
             try:
-                content = self._run_agent(agent_run)
+                if agent_run.parent_agent_run_id is None:
+                    self._dispatch_or_answer_root(task, agent_run)
+                    completed.append(task)
+                    continue
+                else:
+                    content = self._run_agent(agent_run)
             except Exception as exc:
                 self._fail_agent_task(task, agent_run, exc)
                 continue
@@ -69,7 +79,8 @@ class WorkerService:
                 self._complete_root_run(agent_run.project_id, agent_run.run_id, finished_agent)
             else:
                 self._complete_parent_if_ready(agent_run.project_id, agent_run.run_id)
-            completed.append(task)
+            if task not in completed:
+                completed.append(task)
         return completed
 
     def _run_agent(self, agent_run: AgentRun) -> str:
@@ -80,14 +91,154 @@ class WorkerService:
             session_id=f"{agent_run.run_id}:{agent_run.id}",
             messages=(
                 ModelMessage("system", agent_system_prompt(agent_run.definition.name)),
-                ModelMessage("user", agent_task_prompt(project, run, agent_run)),
+                ModelMessage("user", agent_task_prompt(project, run, agent_run, self._assignment(agent_run))),
             ),
         )
         response = self._model_gateway.complete(request)
-        model_line = f"Model: {response.provider}"
-        if response.model:
-            model_line = f"{model_line}/{response.model}"
-        return f"{model_line}{_format_usage(response.usage)}\n\n{response.content.strip()}"
+        return _format_model_response(response, response.content)
+
+    def _dispatch_or_answer_root(self, task: Task, root: AgentRun) -> None:
+        response = self._request_orchestrator_decision(root)
+        decision = parse_orchestrator_decision(response.content)
+        if decision.dispatches_children:
+            self._persist_child_dispatch(task, root, decision, response)
+            return
+
+        content = _format_model_response(response, decision.answer or "")
+        artifact = self._put_agent_result(root, content)
+        answered_root = root.transition(RunStatus.COMPLETED, artifact.id)
+        self._runs.update_agent_run(
+            answered_root,
+            [
+                Event.create(
+                    root.project_id,
+                    EventType.RUN_COMPLETED,
+                    {"agent_run_id": root.id, "artifact_id": artifact.id},
+                    root.run_id,
+                )
+            ],
+        )
+        self._tasks.complete(
+            task.id,
+            [
+                Event.create(
+                    root.project_id,
+                    EventType.TASK_COMPLETED,
+                    {"task_id": task.id, "agent_run_id": root.id},
+                    root.run_id,
+                )
+            ],
+        )
+        self._complete_root_run(root.project_id, root.run_id, answered_root)
+
+    def _request_orchestrator_decision(self, root: AgentRun) -> ModelResponse:
+        run = self._runs.get_run(root.project_id, root.run_id)
+        project = self._runs.get_project(root.project_id)
+        request = ModelRequest(
+            profile=root.definition.model_profile,
+            session_id=f"{root.run_id}:{root.id}:dispatch",
+            messages=(
+                ModelMessage("system", orchestrator_dispatch_contract()),
+                ModelMessage(
+                    "user",
+                    "\n".join(
+                        [
+                            f"Project: {project.name}",
+                            f"Workspace root: {project.workspace.workspace_root}",
+                            f"Allowed root: {project.workspace.allowed_root}",
+                            f"Run id: {run.id}",
+                            "",
+                            "User request:",
+                            run.command,
+                        ]
+                    ),
+                ),
+            ),
+            max_output_tokens=700,
+        )
+        return self._model_gateway.complete(request)
+
+    def _persist_child_dispatch(
+        self,
+        task: Task,
+        root: AgentRun,
+        decision: OrchestratorDecision,
+        response: ModelResponse,
+    ) -> None:
+        decision_artifact = self._artifacts.put_text(
+            project_id=root.project_id,
+            run_id=root.run_id,
+            kind="text.orchestrator-dispatch",
+            name=f"orchestrator-dispatch-{root.id}.json",
+            content=_format_model_response(response, decision.raw_content),
+        )
+        children: list[AgentRun] = []
+        child_tasks: list[Task] = []
+        events: list[Event] = [
+            Event.create(
+                root.project_id,
+                EventType.AGENT_DISPATCHED,
+                {"agent_run_id": root.id, "artifact_id": decision_artifact.id},
+                root.run_id,
+            ),
+            Event.create(
+                root.project_id,
+                EventType.RUN_WAITING,
+                {"run_id": root.run_id, "agent_run_id": root.id},
+                root.run_id,
+            ),
+        ]
+        for dispatch in decision.child_agents:
+            assignment = self._artifacts.put_text(
+                project_id=root.project_id,
+                run_id=root.run_id,
+                kind="text.agent-assignment",
+                name=f"{dispatch.definition.name}-assignment-{root.id}.txt",
+                content=dispatch.task,
+            )
+            child = AgentRun.create(
+                run_id=root.run_id,
+                project_id=root.project_id,
+                definition=dispatch.definition,
+                parent_agent_run_id=root.id,
+                input_artifact_id=assignment.id,
+            )
+            child_task = Task.create(child.id)
+            children.append(child)
+            child_tasks.append(child_task)
+            events.append(
+                Event.create(
+                    root.project_id,
+                    EventType.TASK_QUEUED,
+                    {"task_id": child_task.id, "agent_run_id": child.id},
+                    root.run_id,
+                )
+            )
+
+        waiting_run = self._runs.get_run(root.project_id, root.run_id).transition(RunStatus.WAITING)
+        self._runs.add_child_runs(
+            waiting_run,
+            root.transition(RunStatus.WAITING),
+            children,
+            child_tasks,
+            events,
+        )
+        self._tasks.complete(
+            task.id,
+            [
+                Event.create(
+                    root.project_id,
+                    EventType.TASK_COMPLETED,
+                    {"task_id": task.id, "agent_run_id": root.id},
+                    root.run_id,
+                )
+            ],
+        )
+
+    def _assignment(self, agent_run: AgentRun) -> str | None:
+        if not agent_run.input_artifact_id:
+            return None
+        return self._artifacts.get_text(agent_run.input_artifact_id)
 
     def _put_agent_result(self, agent_run: AgentRun, content: str) -> ArtifactMetadata:
         return self._artifacts.put_text(
@@ -126,6 +277,55 @@ class WorkerService:
                     EventType.RUN_FAILED,
                     {"task_id": task.id, "agent_run_id": agent_run.id},
                     agent_run.run_id,
+                )
+            ],
+        )
+        if agent_run.parent_agent_run_id is None:
+            self._fail_run(agent_run.project_id, agent_run.run_id, artifact.id, agent_run.id)
+        else:
+            self._fail_parent_after_child_failure(agent_run, artifact.id)
+
+    def _fail_parent_after_child_failure(self, child: AgentRun, artifact_id: str) -> None:
+        roots = [
+            agent_run
+            for agent_run in self._runs.get_run_tree(child.project_id, child.run_id)
+            if agent_run.parent_agent_run_id is None
+        ]
+        if len(roots) != 1 or roots[0].status in {RunStatus.COMPLETED, RunStatus.FAILED}:
+            self._fail_run(child.project_id, child.run_id, artifact_id, child.id)
+            return
+
+        parent_error = self._artifacts.put_text(
+            project_id=child.project_id,
+            run_id=child.run_id,
+            kind="text.error",
+            name=f"run-{child.run_id}-failed.txt",
+            content=f"Child agent {child.definition.name} failed. See artifact {artifact_id}.",
+        )
+        failed_parent = roots[0].transition(RunStatus.FAILED, parent_error.id)
+        self._runs.update_agent_run(
+            failed_parent,
+            [
+                Event.create(
+                    child.project_id,
+                    EventType.RUN_FAILED,
+                    {"agent_run_id": failed_parent.id, "artifact_id": parent_error.id},
+                    child.run_id,
+                )
+            ],
+        )
+        self._fail_run(child.project_id, child.run_id, parent_error.id, failed_parent.id)
+
+    def _fail_run(self, project_id: str, run_id: str, artifact_id: str, agent_run_id: str) -> None:
+        run = self._runs.get_run(project_id, run_id).transition(RunStatus.FAILED)
+        self._runs.update_run(
+            run,
+            [
+                Event.create(
+                    project_id,
+                    EventType.RUN_FAILED,
+                    {"run_id": run_id, "agent_run_id": agent_run_id, "artifact_id": artifact_id},
+                    run_id,
                 )
             ],
         )
@@ -206,13 +406,17 @@ class WorkerService:
             max_output_tokens=700,
         )
         response = self._model_gateway.complete(request)
-        model_line = f"Model: {response.provider}"
-        if response.model:
-            model_line = f"{model_line}/{response.model}"
-        return f"{model_line}{_format_usage(response.usage)}\n\n{response.content.strip()}"
+        return _format_model_response(response, response.content)
 
 def _format_usage(usage: dict[str, object]) -> str:
     total = usage.get("total_tokens")
     if isinstance(total, int):
         return f" / tokens: {total}"
     return ""
+
+
+def _format_model_response(response: ModelResponse, content: str) -> str:
+    model_line = f"Model: {response.provider}"
+    if response.model:
+        model_line = f"{model_line}/{response.model}"
+    return f"{model_line}{_format_usage(response.usage)}\n\n{content.strip()}"

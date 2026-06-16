@@ -25,11 +25,13 @@ class CapturingRunRepository:
 
     def add_child_runs(
         self,
+        run: Run,
         parent_agent_run: AgentRun,
         child_agent_runs: Sequence[AgentRun],
         tasks: Sequence[Task],
         events: Sequence[Event],
     ) -> None:
+        self.run = run
         self.parent = parent_agent_run
         self.children.extend(child_agent_runs)
         self.tasks.extend(tasks)

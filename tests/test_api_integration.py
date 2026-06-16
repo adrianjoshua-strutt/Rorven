@@ -64,7 +64,14 @@ class ApiIntegrationTests(unittest.TestCase):
         with patch(
             "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
             return_value={
-                "choices": [{"message": {"role": "assistant", "content": "project result"}}],
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"answer","content":"project result"}',
+                        }
+                    }
+                ],
                 "model": "test/model",
                 "usage": {"total_tokens": 7},
             },

@@ -105,6 +105,7 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
 
     def add_child_runs(
         self,
+        run: Run,
         parent_agent_run: AgentRun,
         child_agent_runs: Sequence[AgentRun],
         tasks: Sequence[Task],
@@ -112,6 +113,7 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
     ) -> None:
         with self._lock:
             state = self._read_state()
+            state["runs"][run.id] = self._run_to_json(run)
             state["agent_runs"][parent_agent_run.id] = self._agent_run_to_json(parent_agent_run)
             for child in child_agent_runs:
                 state["agent_runs"][child.id] = self._agent_run_to_json(child.transition(RunStatus.QUEUED))

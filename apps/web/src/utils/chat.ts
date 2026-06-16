@@ -52,12 +52,15 @@ export function buildProjectChat(
 
 export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWorkEntry[] {
   const task = run?.tasks.find((candidate) => candidate.agent_run_id === agent.id);
+  const assignmentArtifact = run?.artifacts.find((artifact) => artifact.id === agent.input_artifact_id);
   const resultArtifact = run?.artifacts.find((artifact) => artifact.id === agent.result_artifact_id);
   const entries: AgentWorkEntry[] = [
     {
       side: "system",
       title: "Assignment",
-      body: `${agent.definition.name} was started by the project orchestrator for the current request.`,
+      body:
+        assignmentArtifact?.content ??
+        `${agent.definition.name} was started by the project orchestrator for the current request.`,
     },
   ];
   if (task) {
