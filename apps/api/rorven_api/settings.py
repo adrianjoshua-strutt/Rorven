@@ -10,10 +10,10 @@ from rorven.adapters.model import MODEL_PROFILE_NAMES, OPENROUTER_KEY_ENV, load_
 
 
 def read_settings(data_dir: Path) -> dict[str, Any]:
-    model_config = load_model_profile_config()
+    persisted_profile_ids = _read_persisted_model_profile_ids(data_dir)
+    model_config = load_model_profile_config(profile_overrides=persisted_profile_ids)
     api_key_configured = bool(os.environ.get(OPENROUTER_KEY_ENV))
-    gateway_mode = os.environ.get("RORVEN_MODEL_GATEWAY", "auto").strip().lower()
-    active_model_gateway = "openrouter" if api_key_configured and gateway_mode != "local" else "local"
+    active_model_gateway = "openrouter" if api_key_configured else "unconfigured"
     runtime_mode = os.environ.get("RORVEN_RUNTIME_ADAPTER", "langgraph").strip().lower()
     active_runtime_adapter = "local-deterministic" if runtime_mode == "local-deterministic" else "langgraph"
 
@@ -36,7 +36,7 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
                 "model_id": model_config.profile_name(name).model_id or "provider-default",
                 "model_id_configured": model_config.profile_name(name).model_id is not None,
                 "request_timeout_seconds": model_config.profile_name(name).request_timeout_seconds,
-                "source": str(model_config.source),
+                "source": "state.json" if name in persisted_profile_ids else str(model_config.source),
             }
             for name in MODEL_PROFILE_NAMES
         ],
@@ -59,3 +59,30 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             "sandbox": "deferred",
         },
     }
+
+
+def _read_persisted_model_profile_ids(data_dir: Path) -> dict[str, str]:
+    state_path = data_dir / "state.json"
+    if not state_path.exists():
+        return {}
+
+    try:
+        import json
+
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return {}
+    profiles = settings.get("model_profiles")
+    if not isinstance(profiles, dict):
+        return {}
+
+    result: dict[str, str] = {}
+    for name in MODEL_PROFILE_NAMES:
+        value = profiles.get(name)
+        if isinstance(value, str) and value.strip() and value.strip() != "replace-me":
+            result[name] = value.strip()
+    return result

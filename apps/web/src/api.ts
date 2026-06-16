@@ -131,15 +131,30 @@ export type RootDashboard = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-    },
-    ...init,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        "content-type": "application/json",
+        ...init?.headers,
+      },
+      ...init,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown network error";
+    throw new Error(`API request failed for ${path}: ${reason}`);
+  }
+
   if (!response.ok) {
     const text = await response.text();
+    try {
+      const parsed = JSON.parse(text) as { detail?: string };
+      if (parsed.detail) {
+        throw new Error(parsed.detail);
+      }
+    } catch {
+      // Keep the raw response text when it isn't JSON.
+    }
     throw new Error(text || `Request failed with ${response.status}`);
   }
   return (await response.json()) as T;

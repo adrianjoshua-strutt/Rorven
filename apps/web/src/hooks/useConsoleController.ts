@@ -40,7 +40,7 @@ export function useConsoleController() {
     allowed_root: "D:/Cloud/Dropbox/GitHub",
     workspace_root: "D:/Cloud/Dropbox/GitHub/rorven",
   });
-  const [message, setMessage] = useState("Build the next durable platform slice.");
+  const [message, setMessage] = useState("");
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -175,17 +175,18 @@ export function useConsoleController() {
 
   async function handleSubmitMessage(event: FormEvent) {
     event.preventDefault();
-    if (!selectedProjectId || !message.trim()) return;
+    const command = message.trim();
+    if (!selectedProjectId || !command) return;
     setError(null);
     setMessage("");
     try {
       const loadToken = ++projectLoadSequence.current;
-      const run = await submitRun(selectedProjectId, message.trim());
+      const run = await submitRun(selectedProjectId, command);
       setInspectedAgent(null);
       await loadProject(selectedProjectId, run.id, loadToken);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to send message");
-      setMessage("Build the next durable platform slice.");
+      setMessage(command);
     }
   }
 
@@ -258,6 +259,7 @@ export function useConsoleController() {
     handleCreateProject,
     handleSubmitMessage,
     handleSubmitRootMessage: rootProject.handleSubmit,
+    rootIsPending: rootProject.isPending,
     inspectActivity,
     inspectedProjectAgent,
     inspectedRootAgent,
@@ -268,6 +270,7 @@ export function useConsoleController() {
     projects,
     rootMessage: rootProject.message,
     rootMessages: rootProject.messages,
+    rootError: rootProject.error,
     runningSubagents,
     selectedProject,
     selectedProjectId,

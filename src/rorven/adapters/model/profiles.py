@@ -34,7 +34,10 @@ class ModelProfileConfig:
         return self.profile(ModelProfile(name))
 
 
-def load_model_profile_config(path: Path | None = None) -> ModelProfileConfig:
+def load_model_profile_config(
+    path: Path | None = None,
+    profile_overrides: dict[str, str] | None = None,
+) -> ModelProfileConfig:
     configured_path = Path(
         os.environ.get("RORVEN_MODEL_PROFILES_PATH", "config/model-profiles/profiles.example.yaml")
     )
@@ -42,7 +45,7 @@ def load_model_profile_config(path: Path | None = None) -> ModelProfileConfig:
     raw_config = _read_model_config(source)
     profiles = {
         ModelProfile(name): ProfileConfig(
-            model_id=_env_model_id(name)
+            model_id=_configured_model_id((profile_overrides or {}).get(name))
             or _configured_model_id(raw_config["profiles"].get(name, {}).get("model_id")),
             fallback_model_ids=_configured_fallbacks(
                 raw_config["profiles"].get(name, {}).get("fallback_model_ids")

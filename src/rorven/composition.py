@@ -8,7 +8,6 @@ from pathlib import Path
 
 from rorven.adapters.model import (
     OPENROUTER_KEY_ENV,
-    LocalModelGateway,
     OpenRouterModelGateway,
     load_model_profile_config,
 )
@@ -33,7 +32,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
     root = data_dir or _default_data_dir()
     store = LocalFilePlatformStore(root)
     runtime = _create_runtime_adapter(store)
-    model_gateway = _create_model_gateway()
+    model_gateway = _create_model_gateway(store)
     return LocalServices(
         data_dir=root,
         store=store,
@@ -65,12 +64,16 @@ def _default_data_dir() -> Path:
     return resolved
 
 
-def _create_model_gateway() -> ModelGateway:
+def _create_model_gateway(store: LocalFilePlatformStore) -> ModelGateway:
     gateway_mode = os.environ.get("RORVEN_MODEL_GATEWAY", "auto").strip().lower()
     api_key = os.environ.get(OPENROUTER_KEY_ENV)
-    profiles = load_model_profile_config()
-    if gateway_mode == "local" or (gateway_mode == "auto" and not api_key):
-        return LocalModelGateway()
+    profiles = load_model_profile_config(profile_overrides=store.get_model_profile_ids())
+    if gateway_mode not in {"auto", "openrouter"}:
+        raise RuntimeError(
+            "Local/mock model gateway is disabled. Set RORVEN_MODEL_GATEWAY to 'auto' or 'openrouter'."
+        )
+    if not api_key:
+        raise RuntimeError(f"{OPENROUTER_KEY_ENV} is required to start the model gateway")
     if gateway_mode in {"auto", "openrouter"} and api_key:
         return OpenRouterModelGateway(api_key=api_key, profiles=profiles)
     raise RuntimeError(

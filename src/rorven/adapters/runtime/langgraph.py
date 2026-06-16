@@ -15,8 +15,6 @@ from rorven.domain import (
     ModelProfile,
     Project,
     Run,
-    RunStatus,
-    Task,
 )
 
 
@@ -47,8 +45,9 @@ class LangGraphAgentRuntime:
         return run
 
     def plan_child_runs(self, run: Run, parent_agent_run: AgentRun) -> list[AgentRun]:
-        state = self._plan_children_graph.invoke({"run": run, "parent_agent_run": parent_agent_run})
-        return state["child_runs"]
+        # Real child runs are created when actual agent work is dispatched.
+        # No synthetic subagents are created upfront.
+        return []
 
     def _build_start_parent_graph(self):
         graph = StateGraph(_StartParentState)

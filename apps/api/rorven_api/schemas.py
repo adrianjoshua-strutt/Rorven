@@ -20,3 +20,10 @@ class WorkOnceRequest(BaseModel):
 
 class RootMessageRequest(BaseModel):
     message: str = Field(min_length=1)
+
+
+class ModelProfileSettingsRequest(BaseModel):
+    utility: str | None = None
+    balanced: str | None = None
+    reasoning: str | None = None
+    frontier: str | None = None

@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0001-foundation
-last_verified_commit: 6d9b5de
+last_verified_commit: master
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -19,11 +19,13 @@ current_decisions:
   walking_skeleton_runtime_adapter: langgraph
   model_abstraction: ModelGateway
   initial_model_provider_adapter: openrouter
-  model_profiles:
-    - utility
-    - balanced
-    - reasoning
-    - frontier
+  active_model_provider: openrouter
+  active_model_profiles:
+    utility: meta-llama/llama-3.2-3b-instruct
+    balanced: qwen/qwen3-8b
+    reasoning: qwen/qwen3-8b
+    frontier: qwen/qwen3-8b
+  model_profile_persistence: local-file-store-state-json
   secret_abstraction: SecretStore
   secret_delivery: brokered-tools-first
   memory_abstraction: MemoryBackend
@@ -35,6 +37,13 @@ current_decisions:
   evolution_policy: migration-first-current-model-only
   compatibility_policy: exceptional-adr-required
   startup_migrations: automatic-and-blocking
+working_state:
+  api_server: uvicorn rorven_api.main:app --host 127.0.0.1 --port 8000
+  api_pythonpath: '.;src;apps/api;apps/worker'
+  python_interpreter: D:/temp/rorven-validate/Scripts/python.exe
+  frontend_dev_server: npx vite --port 5174 (from apps/web)
+  data_dir: .rorven/state.json
+  openrouter_key_env: RORVEN_OPENROUTER_API_KEY
 next_required_gates:
   - adr-review-for-first-slice
   - module-map-for-first-slice
@@ -42,4 +51,26 @@ next_required_gates:
   - validation-plan-for-walking-skeleton
   - postgres-repository-slice
   - tool-broker-and-sandbox-slice
+known_issues:
+  - id: I-001
+    title: Legacy duplicate projects in .rorven/state.json
+    description: >
+      Many test runs created duplicate "Rorven Local" projects under the same
+      workspace root. The uniqueness guard was added (raises ValueError on
+      duplicate workspace_root), but the existing data has duplicates.
+    remediation: Manual cleanup of .rorven/state.json or a migration pass.
+  - id: I-002
+    title: project chat submit persists run but does not execute agent
+    description: >
+      Submitting a message to a project creates a Run and parent AgentRun record
+      (orchestrator, status=queued) but no real agent work is performed.
+      The walking skeleton has no worker executing tasks yet.
+    remediation: Implement worker task execution loop (M1 outcome).
+  - id: I-003
+    title: plan_child_runs intentionally returns empty list
+    description: >
+      Child agent run creation was previously mocked with hardcoded reviewer and
+      implementer runs. The mock was removed. Real child run dispatch requires
+      the worker execution loop from I-002.
+    remediation: Implement real child dispatch in worker loop.
 last_updated: '2026-06-16'

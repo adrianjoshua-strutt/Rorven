@@ -104,8 +104,6 @@ class ProjectService:
     def submit_task(self, project_id: str, command: str) -> RunState:
         project = self._runs.get_project(project_id)
         run = self._runtime.start_parent_run(project, command)
-        parent = self._root_agent_run(project.id, run.id)
-        self._runtime.plan_child_runs(run, parent)
         return self.get_run_state(project_id, run.id)
 
     def get_run_state(self, project_id: str, run_id: str) -> RunState:
@@ -146,10 +144,8 @@ class RootService:
         self._model_gateway = model_gateway
 
     def get_root_state(self) -> RootDashboardState:
-        self._ensure_welcome_message()
-        projects = self._project_stats()
-        messages = self._root_messages.list_root_messages()
-        return RootDashboardState(messages=messages, activities=self._build_activities(projects, "", False))
+        messages = self._filtered_root_messages()
+        return RootDashboardState(messages=messages, activities=[])
 
     def submit_message(self, message: str) -> RootDashboardState:
         user_message = {
@@ -161,7 +157,6 @@ class RootService:
         }
         self._root_messages.append_root_message(user_message)
         projects = self._project_stats()
-        activities = self._build_activities(projects, message, True)
         response = self._model_gateway.complete(
             ModelRequest(
                 profile=ModelProfile.REASONING,
@@ -185,21 +180,18 @@ class RootService:
             "status": response.provider,
         }
         self._root_messages.append_root_message(assistant_message)
-        return RootDashboardState(messages=self._root_messages.list_root_messages(), activities=activities)
+        return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
 
-    def _ensure_welcome_message(self) -> None:
-        if self._root_messages.list_root_messages():
-            return
-        self._root_messages.append_root_message(
-            {
-                "id": "root-orchestrator-ready",
-                "side": "orchestrator",
-                "title": "Root orchestrator",
-                "body": "I manage the local Rorven installation. Ask me to create projects, find projects, inspect runs, or summarize workspace activity.",
-                "time": _current_iso(),
-                "status": "ready",
-            }
-        )
+    def _filtered_root_messages(self) -> list[dict[str, str]]:
+        legacy_bodies = {
+            "I manage the local Rorven installation. Ask me to create projects, find projects, inspect runs, or summarize workspace activity.",
+            "Create a new project for this repository.",
+        }
+        return [
+            message
+            for message in self._root_messages.list_root_messages()
+            if str(message.get("body", "")).strip() not in legacy_bodies
+        ]
 
     def _project_stats(self) -> list[dict[str, object]]:
         projects: list[dict[str, object]] = []
@@ -217,79 +209,6 @@ class RootService:
             )
         return projects
 
-    def _build_activities(
-        self,
-        projects: Sequence[dict[str, object]],
-        command: str,
-        include_command: bool,
-    ) -> list[RootActivity]:
-        now = _current_iso()
-        lower = command.lower()
-        activities: list[RootActivity] = []
-        matching_projects = [
-            project
-            for project in projects
-            if any(
-                token and len(token) >= 3 and str(project["name"]).lower().find(token) >= 0
-                or token and len(token) >= 3 and str(project["workspace_root"]).lower().find(token) >= 0
-                for token in lower.split()
-            )
-        ]
-
-        if include_command and ("create" in lower or "new project" in lower or "workspace" in lower):
-            activities.append(
-                RootActivity(
-                    id=f"root-project-creator-{now}",
-                    name="project-creator",
-                    model_profile="balanced",
-                    status="completed",
-                    created_at=now,
-                    summary="Use the Create Project flow to register a workspace-scoped project in the API.",
-                )
-            )
-
-        if include_command and ("search" in lower or "find" in lower or "list" in lower):
-            targets = matching_projects if matching_projects else projects
-            for project in targets[:3]:
-                activities.append(
-                    RootActivity(
-                        id=f"root-project-search-{project['id']}",
-                        name=str(project["name"]),
-                        model_profile="utility",
-                        status="completed",
-                        created_at=now,
-                        summary=f"{project['runs']} runs, {project['completed_runs']} completed, {project['active_runs']} active.",
-                    )
-                )
-
-        if include_command and ("stat" in lower or "summary" in lower or "report" in lower):
-            activities.append(
-                RootActivity(
-                    id=f"root-project-analyst-{now}",
-                    name="project-analyst",
-                    model_profile="utility",
-                    status="completed",
-                    created_at=now,
-                    summary=_summarize_projects(projects),
-                )
-            )
-
-        if not activities:
-            for project in projects[:3]:
-                activities.append(
-                    RootActivity(
-                        id=f"root-project-{project['id']}",
-                        name=str(project["name"]),
-                        model_profile="reasoning" if project["active_runs"] else "utility",
-                        status="started" if project["active_runs"] else "ready",
-                        created_at=now,
-                        summary=f"{project['runs']} runs recorded for {project['workspace_root']}.",
-                    )
-                )
-
-        return activities
-
-
 def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> str:
     lines = [
         f"User request: {command}",
@@ -303,23 +222,6 @@ def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> s
         "Respond as the root orchestrator for the Rorven control plane. Keep it operational and concise."
     )
     return "\n".join(lines)
-
-
-def _summarize_projects(projects: Sequence[dict[str, object]]) -> str:
-    project_count = len(projects)
-    run_count = sum(int(project["runs"]) for project in projects)
-    active_run_count = sum(int(project["active_runs"]) for project in projects)
-    if project_count == 0:
-        return "No projects are registered yet. Create one to start durable work."
-    return (
-        f"Tracking {project_count} project{'s' if project_count != 1 else ''}. "
-        f"{run_count} run{'s' if run_count != 1 else ''} recorded across the workspace. "
-        + (
-            f"{active_run_count} run{'s' if active_run_count != 1 else ''} are still active."
-            if active_run_count > 0
-            else "No active runs are currently in flight."
-        )
-    )
 
 
 def _current_iso() -> str:

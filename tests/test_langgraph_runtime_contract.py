@@ -42,7 +42,7 @@ class CapturingRunRepository:
 
 
 class LangGraphRuntimeContractTests(unittest.TestCase):
-    def test_runtime_persists_parent_then_two_child_runs_with_parent_links(self) -> None:
+    def test_runtime_persists_parent_run(self) -> None:
         repository = CapturingRunRepository()
         runtime = LangGraphAgentRuntime(repository)
         project = Project.create(
@@ -54,14 +54,24 @@ class LangGraphRuntimeContractTests(unittest.TestCase):
         self.assertIsNotNone(repository.parent)
         parent = repository.parent
         assert parent is not None
+        self.assertEqual("orchestrator", parent.definition.name)
+        self.assertIsNone(parent.parent_agent_run_id)
+
+    def test_plan_child_runs_returns_empty_until_real_dispatch(self) -> None:
+        repository = CapturingRunRepository()
+        runtime = LangGraphAgentRuntime(repository)
+        project = Project.create(
+            "Example",
+            WorkspaceBinding("D:/workspaces", "D:/workspaces/example"),
+        )
+
+        run = runtime.start_parent_run(project, "Build a serious spine")
+        parent = repository.parent
+        assert parent is not None
 
         children = runtime.plan_child_runs(run, parent)
-
-        self.assertEqual(2, len(children))
-        self.assertEqual(2, len(repository.tasks))
-        self.assertEqual({parent.id}, {child.parent_agent_run_id for child in children})
-        self.assertEqual({"reviewer", "implementer"}, {child.definition.name for child in children})
-        self.assertEqual({"balanced", "reasoning"}, {child.definition.model_profile.value for child in children})
+        self.assertEqual([], children)
+        self.assertEqual(0, len(repository.tasks))
 
 
 if __name__ == "__main__":

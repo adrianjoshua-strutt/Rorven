@@ -17,12 +17,15 @@ def _restore_env(name: str, value: str | None) -> None:
 
 
 class RootDashboardTests(unittest.TestCase):
-    def test_root_dashboard_returns_live_inventory_and_persists_messages(self) -> None:
+    def test_root_dashboard_returns_no_synthetic_messages_or_activities(self) -> None:
         data_dir = Path("test-output") / "tests" / f"root-{uuid4()}"
         data_dir.mkdir(parents=True, exist_ok=True)
         previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
         self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
         os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
 
         module = importlib.import_module("rorven_api.main")
         client = TestClient(module.create_app())
@@ -40,14 +43,59 @@ class RootDashboardTests(unittest.TestCase):
         root_response = client.get("/root")
         self.assertEqual(200, root_response.status_code)
         root_payload = root_response.json()["root"]
-        self.assertGreaterEqual(len(root_payload["activities"]), 1)
-        self.assertGreaterEqual(len(root_payload["messages"]), 1)
+        self.assertEqual([], root_payload["activities"])
+        self.assertEqual([], root_payload["messages"])
 
-        submit_response = client.post("/root/messages", json={"message": "Create a new project for me."})
-        self.assertEqual(200, submit_response.status_code)
-        submit_payload = submit_response.json()["root"]
-        self.assertGreaterEqual(len(submit_payload["messages"]), 3)
-        self.assertTrue(any(message["side"] == "orchestrator" for message in submit_payload["messages"]))
+    def test_root_dashboard_project_creation_does_not_create_fake_activities(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-dup-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        # Create one project
+        create_response = client.post(
+            "/projects",
+            json={
+                "name": "Project 1",
+                "allowed_root": "D:/projects",
+                "workspace_root": "D:/projects/proj1",
+            },
+        )
+        self.assertEqual(201, create_response.status_code)
+        created_id = create_response.json()["project"]["id"]
+
+        root_response = client.get("/root")
+        root_payload = root_response.json()["root"]
+        activities = root_payload["activities"]
+        self.assertEqual([], activities)
+        
+        create_response_2 = client.post(
+            "/projects",
+            json={
+                "name": "Project 2",
+                "allowed_root": "D:/projects",
+                "workspace_root": "D:/projects/proj2",
+            },
+        )
+        self.assertEqual(201, create_response_2.status_code)
+
+        root_response_2 = client.get("/root")
+        root_payload_2 = root_response_2.json()["root"]
+        activities_2 = root_payload_2["activities"]
+        self.assertEqual([], activities_2)
+
+        projects_response = client.get("/projects")
+        self.assertEqual(200, projects_response.status_code)
+        project_ids = {project["id"] for project in projects_response.json()["projects"]}
+        self.assertIn(created_id, project_ids)
+        self.assertEqual(2, len(project_ids))
 
 
 if __name__ == "__main__":

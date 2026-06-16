@@ -26,10 +26,16 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  height: 100%;
   min-width: 320px;
-  min-height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
 }
@@ -53,6 +59,7 @@ button:disabled {
   display: grid;
   grid-template-columns: 280px minmax(460px, 1fr) 336px;
   height: 100vh;
+  max-height: 100vh;
   overflow: hidden;
 }
 
@@ -68,6 +75,7 @@ button:disabled {
   border-right: 1px solid var(--line);
   padding: 14px;
   gap: 12px;
+  min-height: 0;
 }
 
 .subagents-pane {
@@ -246,6 +254,11 @@ button:focus-visible {
   display: grid;
   align-content: start;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .project-card {
@@ -259,19 +272,15 @@ button:focus-visible {
 }
 
 .chat-pane {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  min-height: 0;
+  height: 100vh;
   overflow: hidden;
   background: #0f1214;
 }
 
-.chat-pane > .root-view,
-.chat-pane > .settings-view,
-.chat-pane > .agent-work-view {
-  grid-row: 1 / -1;
-}
+/* views fill the chat-pane */
 
 .chat-header {
   min-height: 70px;
@@ -337,6 +346,7 @@ button:focus-visible {
 .message-list {
   min-height: 0;
   height: 100%;
+  overflow-y: auto;
   overflow-x: hidden;
   padding: 18px 22px;
   display: flex;
@@ -424,6 +434,32 @@ button:focus-visible {
   height: 42px;
 }
 
+.thinking-body {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.thinking-dots span {
+  animation: thinking-pulse 1.2s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinking-pulse {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+
 .empty-chat {
   margin: auto;
   display: grid;
@@ -439,15 +475,53 @@ button:focus-visible {
 }
 
 .root-view {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
+.root-view .message-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.root-view .composer {
+  flex: 0 0 auto;
+}
+
+.missing-credential-banner {
+  margin: 12px 18px 0;
+  padding: 12px;
+  border: 1px solid rgba(213, 162, 66, 0.48);
+  background: rgba(213, 162, 66, 0.1);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.missing-credential-banner strong,
+.settings-missing-credential strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #f7cf7d;
+}
+
+.missing-credential-banner p,
+.settings-missing-credential p {
+  margin: 0;
+  color: #ecd9b5;
+  font-size: 0.84rem;
+}
+
 .settings-view {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
@@ -464,6 +538,17 @@ button:focus-visible {
   border: 1px solid var(--line);
   background: var(--pane-3);
   padding: 14px;
+}
+
+.settings-missing-credential {
+  border: 1px solid rgba(213, 162, 66, 0.48);
+  background: rgba(213, 162, 66, 0.1);
+  padding: 12px;
+}
+
+.settings-missing-credential code {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  color: #fff2d5;
 }
 
 .root-content strong,
@@ -485,6 +570,7 @@ button:focus-visible {
 }
 
 .settings-content {
+  flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 18px;
@@ -611,11 +697,23 @@ button:focus-visible {
 }
 
 .agent-work-view {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   background: #0f1214;
+}
+
+.agent-work-view .message-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.agent-work-view .composer {
+  flex: 0 0 auto;
 }
 
 .agent-work-header {

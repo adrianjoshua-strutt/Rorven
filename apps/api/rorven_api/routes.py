@@ -5,7 +5,13 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from rorven.composition import LocalServices
-from rorven_api.schemas import CreateProjectRequest, RootMessageRequest, SubmitRunRequest, WorkOnceRequest
+from rorven_api.schemas import (
+    CreateProjectRequest,
+    ModelProfileSettingsRequest,
+    RootMessageRequest,
+    SubmitRunRequest,
+    WorkOnceRequest,
+)
 from rorven_api.serializers import (
     project_state_to_api,
     project_to_api,
@@ -31,13 +37,33 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
     def get_settings() -> dict[str, Any]:
         return {"settings": read_settings(services.data_dir)}
 
+    @app.post("/settings/model-profiles")
+    def update_model_profiles(request: ModelProfileSettingsRequest) -> dict[str, Any]:
+        updates = {
+            "utility": request.utility,
+            "balanced": request.balanced,
+            "reasoning": request.reasoning,
+            "frontier": request.frontier,
+        }
+        normalized = {
+            name: (value.strip() if isinstance(value, str) else "")
+            for name, value in updates.items()
+            if value is not None
+        }
+        services.store.set_model_profile_ids(normalized)
+        return {"settings": read_settings(services.data_dir)}
+
     @app.get("/root")
     def get_root() -> dict[str, Any]:
         return {"root": root_state_to_api(services.root.get_root_state())}
 
     @app.post("/root/messages")
     def submit_root_message(request: RootMessageRequest) -> dict[str, Any]:
-        return {"root": root_state_to_api(services.root.submit_message(request.message))}
+        try:
+            root_state = services.root.submit_message(request.message)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Root orchestrator request failed: {exc}") from exc
+        return {"root": root_state_to_api(root_state)}
 
     @app.post("/projects", status_code=201)
     def create_project(request: CreateProjectRequest) -> dict[str, Any]:

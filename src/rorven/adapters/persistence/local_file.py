@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime, timedelta
 import json
+import os
 from pathlib import Path
 from threading import RLock
 from typing import Any, Sequence
@@ -31,6 +32,10 @@ from rorven.domain import (
     new_id,
     utc_now,
 )
+
+
+MODEL_PROFILE_NAMES = ("utility", "balanced", "reasoning", "frontier")
+MODEL_PROFILE_ENV_PREFIX = "RORVEN_MODEL_PROFILE_"
 
 
 class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, ArtifactStore):
@@ -310,6 +315,43 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             state["root_messages"].append(message)
             self._write_state(state)
 
+    def get_model_profile_ids(self) -> dict[str, str]:
+        with self._lock:
+            state = self._read_state()
+            settings = state.get("settings")
+            if not isinstance(settings, dict):
+                return {}
+            profiles = settings.get("model_profiles")
+            if not isinstance(profiles, dict):
+                return {}
+            result: dict[str, str] = {}
+            for name in MODEL_PROFILE_NAMES:
+                value = profiles.get(name)
+                if isinstance(value, str) and value.strip() and value.strip() != "replace-me":
+                    result[name] = value.strip()
+            return result
+
+    def set_model_profile_ids(self, model_ids: dict[str, str]) -> None:
+        with self._lock:
+            state = self._read_state()
+            settings = state.setdefault("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
+                state["settings"] = settings
+            profiles = settings.setdefault("model_profiles", {})
+            if not isinstance(profiles, dict):
+                profiles = {}
+                settings["model_profiles"] = profiles
+            for name in MODEL_PROFILE_NAMES:
+                if name not in model_ids:
+                    continue
+                value = model_ids[name].strip()
+                if value:
+                    profiles[name] = value
+                else:
+                    profiles.pop(name, None)
+            self._write_state(state)
+
     def get_text(self, artifact_id: str) -> str:
         with self._lock:
             state = self._read_state()
@@ -329,6 +371,9 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
             "events": {},
             "artifacts": {},
             "root_messages": [],
+            "settings": {
+                "model_profiles": {},
+            },
         }
 
     def _migrate_state(self) -> None:
@@ -337,6 +382,26 @@ class LocalFilePlatformStore(RunRepository, EventRepository, TaskQueue, Artifact
         for key, value in self._empty_state().items():
             if key not in state:
                 state[key] = value
+                changed = True
+
+        settings = state.get("settings")
+        if not isinstance(settings, dict):
+            state["settings"] = {"model_profiles": {}}
+            settings = state["settings"]
+            changed = True
+        profiles = settings.get("model_profiles")
+        if not isinstance(profiles, dict):
+            settings["model_profiles"] = {}
+            profiles = settings["model_profiles"]
+            changed = True
+
+        # One-time migration: seed persisted model profile IDs from legacy env vars.
+        for name in MODEL_PROFILE_NAMES:
+            if isinstance(profiles.get(name), str) and profiles[name].strip():
+                continue
+            env_value = os.environ.get(f"{MODEL_PROFILE_ENV_PREFIX}{name.upper()}")
+            if isinstance(env_value, str) and env_value.strip() and env_value.strip() != "replace-me":
+                profiles[name] = env_value.strip()
                 changed = True
         if changed:
             self._write_state(state)

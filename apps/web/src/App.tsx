@@ -10,6 +10,9 @@ import { SettingsView } from "./components/settings/SettingsView";
 
 export function App() {
   const consoleState = useConsoleController();
+  const modelCredential = consoleState.settingsSnapshot?.credentials[0] ?? null;
+  const isModelProviderConfigured = modelCredential?.configured ?? false;
+  const modelProviderEnvVar = modelCredential?.environment_variable ?? "OPENROUTER_API_KEY";
 
   return (
     <main className="app-shell">
@@ -37,10 +40,15 @@ export function App() {
           />
         ) : consoleState.selectedScope === "root" ? (
           <RootProjectView
+            error={consoleState.rootError}
+            isPending={consoleState.rootIsPending}
             messages={consoleState.rootMessages}
             message={consoleState.rootMessage}
             onMessageChange={consoleState.setRootMessage}
+            onOpenSettings={consoleState.selectSettings}
             onSubmit={consoleState.handleSubmitRootMessage}
+            isModelProviderConfigured={isModelProviderConfigured}
+            modelProviderEnvVar={modelProviderEnvVar}
           />
         ) : consoleState.selectedScope === "settings" ? (
           <SettingsView

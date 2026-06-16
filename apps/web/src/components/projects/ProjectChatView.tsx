@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useRef } from "react";
 import { Project } from "../../api";
 import { ChatMessage, LoadState } from "../../types";
 import { ChatBubble } from "../chat/ChatBubble";
@@ -23,6 +23,14 @@ export function ProjectChatView({
   onSubmit: (event: FormEvent) => void;
   project: Project | null;
 }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+  }, [chatMessages.length]);
+
   return (
     <>
       <header className="chat-header">
@@ -33,9 +41,8 @@ export function ProjectChatView({
         <ConnectionState state={loadState} />
       </header>
 
-      {error ? <div className="error-banner">{error}</div> : null}
-
-      <div className="message-list" aria-label="Project orchestrator chat">
+      <div className="message-list" aria-label="Project orchestrator chat" ref={listRef}>
+        {error ? <div className="error-banner">{error}</div> : null}
         {chatMessages.length > 0 ? (
           chatMessages.map((item) => <ChatBubble item={item} key={item.id} />)
         ) : (

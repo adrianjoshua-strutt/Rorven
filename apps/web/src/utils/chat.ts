@@ -9,17 +9,27 @@ export function buildProjectChat(
 ): ChatMessage[] {
   if (!project || !run) return [];
   const root = run.agent_runs.find((agentRun) => agentRun.parent_agent_run_id === null);
-  const finished = subagents.filter((agent) => isDone(agent.status)).length;
-  const running = subagents.length - finished;
-  const summary =
-    finished === subagents.length && subagents.length > 0
-      ? root?.result_artifact_id
-        ? (run.artifacts.find((artifact) => artifact.id === root.result_artifact_id)?.content ??
-          `All ${subagents.length} subagents finished.`)
-        : `All ${subagents.length} subagents finished. I am preparing the final summary.`
-      : subagents.length
-        ? `I started ${subagents.length} subagents. ${running} still running, ${finished} finished.`
-        : "I am preparing the work plan.";
+
+  // Show the real result artifact content if available, otherwise the live run status.
+  let orchestratorBody: string;
+  if (root?.result_artifact_id) {
+    orchestratorBody =
+      run.artifacts.find((a) => a.id === root.result_artifact_id)?.content ??
+      "Work completed.";
+  } else if (subagents.length > 0) {
+    const finished = subagents.filter((a) => isDone(a.status)).length;
+    const running = subagents.length - finished;
+    orchestratorBody =
+      finished === subagents.length
+        ? `All ${subagents.length} subagents finished.`
+        : `${running} subagent${running !== 1 ? "s" : ""} running, ${finished} finished.`;
+  } else {
+    orchestratorBody = root?.status === "queued" || root?.status === "started"
+      ? "Working…"
+      : root?.status === "completed"
+        ? "Done."
+        : "Queued.";
+  }
 
   return [
     {
@@ -33,7 +43,7 @@ export function buildProjectChat(
       id: `${run.id}-orchestrator`,
       side: "orchestrator",
       title: root?.definition.name ?? "Project orchestrator",
-      body: summary,
+      body: orchestratorBody,
       time: root?.created_at ?? run.created_at,
       status: root?.status ?? run.status,
     },

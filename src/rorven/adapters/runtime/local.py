@@ -11,8 +11,6 @@ from rorven.domain import (
     ModelProfile,
     Project,
     Run,
-    RunStatus,
-    Task,
 )
 
 
@@ -41,31 +39,6 @@ class LocalDeterministicRuntime:
         return run
 
     def plan_child_runs(self, run: Run, parent_agent_run: AgentRun) -> list[AgentRun]:
-        reviewer = AgentRun.create(
-            run_id=run.id,
-            project_id=run.project_id,
-            parent_agent_run_id=parent_agent_run.id,
-            definition=AgentDefinitionRef(
-                name="reviewer",
-                version="0001",
-                model_profile=ModelProfile.BALANCED,
-            ),
-        )
-        implementer = AgentRun.create(
-            run_id=run.id,
-            project_id=run.project_id,
-            parent_agent_run_id=parent_agent_run.id,
-            definition=AgentDefinitionRef(
-                name="implementer",
-                version="0001",
-                model_profile=ModelProfile.REASONING,
-            ),
-        )
-        tasks = [Task.create(reviewer.id), Task.create(implementer.id)]
-        waiting_parent = parent_agent_run.transition(RunStatus.WAITING)
-        events = [
-            Event.create(run.project_id, EventType.RUN_QUEUED, {"agent_run_id": reviewer.id}, run.id),
-            Event.create(run.project_id, EventType.RUN_QUEUED, {"agent_run_id": implementer.id}, run.id),
-        ]
-        self._runs.add_child_runs(waiting_parent, [reviewer, implementer], tasks, events)
-        return [reviewer, implementer]
+        # Real child runs are created when actual agent work is dispatched.
+        # No synthetic subagents are created upfront.
+        return []

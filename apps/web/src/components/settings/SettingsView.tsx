@@ -21,6 +21,8 @@ export function SettingsView({
   onReload: () => void;
 }) {
   const credential = settings?.credentials[0] ?? null;
+  const showMissingCredentialPrompt = credential?.configured === false;
+  const envVarName = credential?.environment_variable ?? "OPENROUTER_API_KEY";
   return (
     <section className="settings-view">
       <header className="chat-header">
@@ -43,6 +45,14 @@ export function SettingsView({
       </header>
 
       <div className="settings-content">
+        {showMissingCredentialPrompt ? (
+          <section className="settings-missing-credential" role="status" aria-live="polite">
+            <strong>Action required: add your OpenRouter API key</strong>
+            <p>
+              Set <code>{envVarName}</code> in your environment, then restart the API process.
+            </p>
+          </section>
+        ) : null}
         <CredentialsSection credential={credential} />
         <ModelProfilesSection settings={settings} />
         <RuntimeSection apiEndpoint={apiEndpoint} settings={settings} />
