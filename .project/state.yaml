@@ -5,8 +5,8 @@ project_phase: foundation
 status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
-active_feature: 0002-real-project-execution
-last_verified_commit: 597486a
+active_feature: 0003-durable-subagent-dispatch
+last_verified_commit: c2ab911
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -48,7 +48,7 @@ next_required_gates:
   - adr-review-for-first-slice
   - module-map-for-first-slice
   - migration-skeleton-plan
-  - validation-plan-for-real-execution
+  - validation-plan-for-subagent-dispatch
   - postgres-repository-slice
   - tool-broker-and-sandbox-slice
 known_issues:
@@ -60,13 +60,13 @@ known_issues:
       duplicate workspace_root), but the existing data has duplicates.
     remediation: Manual cleanup of .rorven/state.json or a migration pass.
   - id: I-002
-    title: explicit subagent dispatch is not implemented
+    title: subagent dispatch has only the first approved agent types
     description: >
-      Project messages now queue and execute the root orchestrator task through
-      the model gateway, but the orchestrator cannot yet dispatch real child
-      agents. The previous hardcoded reviewer/implementer path was removed.
-    remediation: Add a durable orchestrator dispatch contract, policy checks,
-      child task creation, and worker join handling.
+      Project orchestrators can now dispatch real reviewer and implementer child
+      tasks through a structured JSON contract. Broader agent definitions,
+      permission profiles, and versioned workflow definitions are still pending.
+    remediation: Add versioned agent/workflow definition storage and expand the
+      dispatch policy as each approved subagent type is implemented.
   - id: I-003
     title: local file persistence remains the temporary system of record
     description: >
@@ -77,8 +77,9 @@ known_issues:
   - id: I-004
     title: no brokered tools or sandbox authority
     description: >
-      Model-backed workers can produce text artifacts only. They cannot inspect,
-      edit, execute, or commit project files through controlled tools yet.
+      Model-backed workers can dispatch, analyze, review, plan, summarize, and
+      produce text artifacts only. They cannot inspect, edit, execute, or commit
+      project files through controlled tools yet.
     remediation: Implement tool broker, permission policy, sandbox adapter, and
       audit trail before allowing code-changing claims.
 last_updated: '2026-06-16'

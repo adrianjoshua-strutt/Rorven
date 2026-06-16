@@ -40,6 +40,11 @@ When the key is present and `RORVEN_MODEL_GATEWAY` is `auto` or `openrouter`,
 root orchestrator messages and project worker tasks use OpenRouter for model
 responses.
 
+Project orchestrator worker calls use a strict provider-neutral JSON contract:
+answer directly or dispatch approved child agents with text assignments. The
+application layer parses and validates that contract before any child task is
+persisted.
+
 ## Profile versioning
 
 Profiles are immutable once used. Each run records:
@@ -73,7 +78,7 @@ The settings API must not place raw provider credentials in responses. Agent def
 
 ## Current limitation
 
-The first model-backed worker slice has no brokered filesystem, shell, memory,
-sandbox tools, or explicit subagent dispatch. Model-backed project orchestrator
-tasks produce persisted text artifacts; they must not claim they edited files or
-ran commands until the tool-broker and sandbox slices exist.
+The model-backed worker has no brokered filesystem, shell, memory, or sandbox
+tools. Root orchestrators and child subagents produce persisted text artifacts;
+they must not claim they edited files or ran commands until the tool-broker and
+sandbox slices exist.

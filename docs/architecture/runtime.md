@@ -8,9 +8,11 @@ The current runtime adapter uses LangGraph behind `AgentRuntime`. There is no pr
 
 ## Parent-child execution
 
-Each project message creates a durable run and one root orchestrator `agent_run` before execution begins. A task is queued for that root agent. A worker leases the task, calls the model gateway through the application port, stores the response as an artifact, completes the task, and marks the run completed.
+Each project message creates a durable run and one root orchestrator `agent_run` before execution begins. A task is queued for that root agent. A worker leases the task and asks the orchestrator for a structured dispatch decision through the model gateway.
 
-Explicit child/subagent dispatch is the next runtime slice. The platform will only create child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
+The orchestrator may answer directly or dispatch approved child subagents. Dispatch is represented as provider-neutral JSON parsed in the application layer. The platform persists child assignments as artifacts, creates child `agent_run` records and tasks, marks the parent run waiting, then lets workers execute the child tasks. When all child runs complete, the root orchestrator summarizes their artifacts and completes the run.
+
+The platform only creates child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
 
 An agent run contains:
 
@@ -29,9 +31,9 @@ An agent run contains:
 
 ## Parallel work
 
-The target architecture allows the orchestrator to create multiple child runs in one transaction. Workers lease them independently. A durable join condition determines when the parent becomes runnable again.
+The orchestrator can create multiple child runs in one repository transaction. Workers lease them independently. A durable join condition determines when the parent becomes summarizable again.
 
-The current implementation only executes the root orchestrator task. Parallel child dispatch remains intentionally absent until the dispatch contract, policy checks, and tool authority are implemented.
+The current implementation supports reviewer and implementer child runs. Tool authority, sandbox execution, broad agent catalogs, and permission-profile evaluation remain separate slices.
 
 ## Recovery
 
