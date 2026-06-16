@@ -39,6 +39,13 @@ The first implementation slice should exercise real ports and adapters without r
 - `postgres`: system of record and queue foundation
 - optional reverse proxy for TLS and routing
 
+## Source organization
+
+- The web app entrypoint only mounts React providers and the top-level app.
+- Console behavior is split into screen components, layout components, chat components, settings components, controller hooks, typed utilities, and API contracts.
+- The API app factory only assembles middleware and routes. Request schemas, response serializers, and route handlers live in separate modules.
+- Long-running chat and subagent transcripts must stay inside fixed-height scroll regions and wrap long content inside their pane.
+
 ## Required architecture documents
 
 - `system-context.md`

@@ -47,3 +47,7 @@ risks:
     title: Console UI drifts away from the product mental model
     severity: high
     mitigation: keep root, project, subagent, and settings surfaces explicit; use Mantine component primitives for controls and reserve custom CSS for layout only
+  - id: R-013
+    title: Product surfaces accumulate oversized files
+    severity: medium
+    mitigation: keep UI screens split into components, hooks, and typed helpers; keep API entrypoints thin with schemas, serializers, and routes in separate modules

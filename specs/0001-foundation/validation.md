@@ -53,6 +53,12 @@ Status: In progress
 - `d7f2673` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after preserving project list order on selection.
 - `d7f2673` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - Verified clicking a project no longer reorders the project list under the cursor; selected project rows are highlighted in place.
+- `acc03d3` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after splitting the console into components, hooks, typed utilities, and a small React bootstrap entrypoint.
+- `acc03d3` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 13 tests passed after splitting the FastAPI app into entrypoint, routes, schemas, and serializers.
+- `acc03d3` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Verified `apps/web/src/main.tsx` is only the React bootstrap, console screens live under `apps/web/src/components`, controller state lives under `apps/web/src/hooks`, and shared helpers live under `apps/web/src/utils`.
+- Verified `apps/api/rorven_api/main.py` only builds the FastAPI app while routes, serializers, and request schemas live in separate modules.
+- Verified chat bubbles and agent work entries wrap long content and stay inside fixed-height scroll regions.
 
 ## Known deferred evidence
 
