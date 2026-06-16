@@ -2,12 +2,12 @@ project_name: rorven
 product_display_name: Rorven
 product_naming_status: provisional-public-project-name
 project_phase: foundation
-status: planning
+status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0001-foundation
-last_verified_commit: null
-implementation_started: false
+last_verified_commit: 02a2109
+implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
   frontend: react-vite-typescript
@@ -15,6 +15,7 @@ current_decisions:
   database: postgresql
   runtime_abstraction: AgentRuntime
   initial_runtime_adapter: langgraph
+  walking_skeleton_runtime_adapter: local-deterministic
   model_abstraction: ModelGateway
   initial_model_provider_adapter: openrouter
   model_profiles:
