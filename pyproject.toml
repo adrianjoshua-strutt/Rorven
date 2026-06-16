@@ -4,12 +4,15 @@ version = "0.1.0"
 description = "Durable infrastructure for autonomous work."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.0",
+    "httpx2>=0.28.0",
+    "uvicorn[standard]>=0.30.0",
+]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "apps/api", "apps/worker"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-

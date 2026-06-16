@@ -9,5 +9,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 coverage/
+.tmp/
+test-output/
 *.log
 .DS_Store

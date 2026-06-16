@@ -13,6 +13,8 @@ from rorven.domain.model import (
     Task,
     TaskStatus,
     WorkspaceBinding,
+    new_id,
+    utc_now,
 )
 
 __all__ = [
@@ -28,5 +30,6 @@ __all__ = [
     "Task",
     "TaskStatus",
     "WorkspaceBinding",
+    "new_id",
+    "utc_now",
 ]
-
