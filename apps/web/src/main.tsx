@@ -35,9 +35,11 @@ type ChatMessage = {
   time: string;
   status?: string;
 };
+type SelectedScope = "root" | "project";
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedScope, setSelectedScope] = useState<SelectedScope>("root");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunState | null>(null);
   const [inspectedAgentId, setInspectedAgentId] = useState<string | null>(null);
@@ -79,8 +81,7 @@ function App() {
     try {
       const nextProjects = await listProjects();
       setProjects(nextProjects);
-      const projectId = selectedProjectId ?? nextProjects[0]?.id ?? null;
-      setSelectedProjectId(projectId);
+      const projectId = selectedScope === "project" ? selectedProjectId : null;
       if (projectId) {
         await loadProject(projectId, selectedRun?.id);
       }
@@ -163,7 +164,16 @@ function App() {
           </div>
         </div>
 
-        <button className="root-project" type="button">
+        <button
+          className={selectedScope === "root" ? "root-project active" : "root-project"}
+          onClick={() => {
+            setSelectedScope("root");
+            setSelectedProjectId(null);
+            setSelectedRun(null);
+            setInspectedAgentId(null);
+          }}
+          type="button"
+        >
           <strong>Root project</strong>
           <span>Project search, statistics, setup</span>
         </button>
@@ -188,9 +198,14 @@ function App() {
           {projects.map((project) => (
             <button
               key={project.id}
-              className={project.id === selectedProjectId ? "project-card active" : "project-card"}
+              className={
+                selectedScope === "project" && project.id === selectedProjectId
+                  ? "project-card active"
+                  : "project-card"
+              }
               onClick={async () => {
                 setSelectedProjectId(project.id);
+                setSelectedScope("project");
                 setSelectedRun(null);
                 setInspectedAgentId(null);
                 await loadProject(project.id, null);
@@ -207,6 +222,8 @@ function App() {
       <section className="chat-pane">
         {inspectedAgent ? (
           <AgentWorkView agent={inspectedAgent} run={selectedRun} onBack={() => setInspectedAgentId(null)} />
+        ) : selectedScope === "root" ? (
+          <RootProjectView projectCount={projects.length} />
         ) : (
           <>
             <header className="chat-header">
@@ -342,6 +359,37 @@ function ChatBubble({ item }: { item: ChatMessage }) {
   );
 }
 
+function RootProjectView({ projectCount }: { projectCount: number }) {
+  return (
+    <section className="root-view">
+      <header className="chat-header">
+        <div>
+          <p>System project</p>
+          <h1>Root project</h1>
+        </div>
+        <ConnectionState state="idle" />
+      </header>
+      <div className="root-content">
+        <article>
+          <strong>Projects</strong>
+          <span>{projectCount}</span>
+          <p>Browse workspace-scoped projects from the left rail.</p>
+        </article>
+        <article>
+          <strong>Search</strong>
+          <span>Planned</span>
+          <p>Find projects, memories, runs, and artifacts across the local installation.</p>
+        </article>
+        <article>
+          <strong>Statistics</strong>
+          <span>Planned</span>
+          <p>Track agent runs, costs, model profiles, failures, and recovery events.</p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 function SubagentGroup({
   title,
   agents,
@@ -423,9 +471,14 @@ function AgentWorkView({
 
       <div className="agent-work-log">
         {entries.map((entry) => (
-          <article className="work-entry" key={entry.title}>
-            <strong>{entry.title}</strong>
-            <p>{entry.body}</p>
+          <article className={`work-entry ${entry.side}`} key={entry.title}>
+            <div className="bubble-icon">
+              {entry.side === "system" ? <User size={16} aria-hidden="true" /> : <Bot size={16} aria-hidden="true" />}
+            </div>
+            <div>
+              <strong>{entry.title}</strong>
+              <p>{entry.body}</p>
+            </div>
           </article>
         ))}
       </div>
@@ -520,25 +573,28 @@ function buildAgentWork(agent: AgentRun, run: RunState | null) {
   const task = run?.tasks.find((candidate) => candidate.agent_run_id === agent.id);
   const entries = [
     {
+      side: "system",
       title: "Assignment",
       body: `${agent.definition.name} was started by the project orchestrator for the current request.`,
     },
   ];
   if (task) {
     entries.push({
+      side: "agent",
       title: "Execution",
       body:
         task.status === "completed"
-          ? "The worker completed this subagent task and recorded the result."
+          ? "I completed the assigned work and recorded a result for the orchestrator."
           : task.status === "leased"
-            ? `A worker is executing this task${task.lease_owner ? ` (${task.lease_owner})` : ""}.`
-            : "This subagent is waiting for a worker slot.",
+            ? `I am currently running${task.lease_owner ? ` on ${task.lease_owner}` : ""}.`
+            : "I am waiting for an available worker slot.",
     });
   }
   if (agent.result_artifact_id) {
     entries.push({
+      side: "agent",
       title: "Result",
-      body: `A result artifact is available: ${agent.result_artifact_id.slice(0, 8)}.`,
+      body: `My result artifact is available: ${agent.result_artifact_id.slice(0, 8)}.`,
     });
   }
   return entries;
