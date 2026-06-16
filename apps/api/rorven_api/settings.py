@@ -14,8 +14,6 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
     model_config = load_model_profile_config(profile_overrides=persisted_profile_ids)
     api_key_configured = bool(os.environ.get(OPENROUTER_KEY_ENV))
     active_model_gateway = "openrouter" if api_key_configured else "unconfigured"
-    runtime_mode = os.environ.get("RORVEN_RUNTIME_ADAPTER", "langgraph").strip().lower()
-    active_runtime_adapter = "local-deterministic" if runtime_mode == "local-deterministic" else "langgraph"
 
     return {
         "credentials": [
@@ -41,10 +39,10 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             for name in MODEL_PROFILE_NAMES
         ],
         "runtime": {
-            "active_runtime_adapter": active_runtime_adapter,
+            "active_runtime_adapter": "langgraph",
             "planned_runtime_adapter": "langgraph",
             "active_model_gateway": active_model_gateway,
-            "system_of_record": "local-file-walking-skeleton",
+            "system_of_record": "local-file-json",
             "planned_system_of_record": "postgresql",
             "data_dir": str(data_dir),
         },

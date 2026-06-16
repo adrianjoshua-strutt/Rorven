@@ -22,8 +22,11 @@ class PersistenceE2ETests(unittest.TestCase):
         data_dir = Path("test-output") / "tests" / f"persist-e2e-{uuid4()}"
         data_dir.mkdir(parents=True, exist_ok=True)
         previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
         self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
         os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
 
         module = importlib.import_module("rorven_api.main")
         

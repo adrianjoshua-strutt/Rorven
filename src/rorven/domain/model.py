@@ -58,6 +58,7 @@ class EventType(StrEnum):
     RUN_WAITING = "run.waiting"
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
+    TASK_QUEUED = "task.queued"
     TASK_LEASED = "task.leased"
     TASK_COMPLETED = "task.completed"
     ARTIFACT_CREATED = "artifact.created"

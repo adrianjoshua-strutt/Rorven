@@ -4,6 +4,7 @@ import importlib
 import os
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -21,8 +22,11 @@ class ApiIntegrationTests(unittest.TestCase):
         data_dir = Path("test-output") / "tests" / f"api-{uuid4()}"
         data_dir.mkdir(parents=True, exist_ok=True)
         previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
         self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
         os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
         module = importlib.import_module("rorven_api.main")
         app = module.create_app()
         client = TestClient(app)
@@ -54,22 +58,28 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(202, run_response.status_code)
         run_payload = run_response.json()["run"]
-        self.assertEqual(3, len(run_payload["agent_runs"]))
-        self.assertEqual(2, len(run_payload["tasks"]))
+        self.assertEqual(1, len(run_payload["agent_runs"]))
+        self.assertEqual(1, len(run_payload["tasks"]))
 
-        work_response = client.post("/worker/work-once", json={"worker_id": "api-test"})
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [{"message": {"role": "assistant", "content": "project result"}}],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+        ):
+            work_response = client.post("/worker/work-once", json={"worker_id": "api-test"})
         self.assertEqual(200, work_response.status_code)
-        self.assertEqual(2, len(work_response.json()["completed_tasks"]))
+        self.assertEqual(1, len(work_response.json()["completed_tasks"]))
 
         state_response = client.get(f"/projects/{project_id}/runs/{run_payload['id']}")
         self.assertEqual(200, state_response.status_code)
         state_payload = state_response.json()["run"]
         self.assertEqual("completed", state_payload["status"])
         self.assertEqual({"completed"}, {task["status"] for task in state_payload["tasks"]})
-        self.assertEqual(3, len(state_payload["artifacts"]))
-        self.assertTrue(
-            any("Local model gateway is active" in artifact["content"] for artifact in state_payload["artifacts"])
-        )
+        self.assertEqual(1, len(state_payload["artifacts"]))
+        self.assertIn("project result", state_payload["artifacts"][0]["content"])
         self.assertTrue((data_dir / "state.json").exists())
 
 

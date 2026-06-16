@@ -99,9 +99,6 @@ class AgentRuntime(Protocol):
     def start_parent_run(self, project: Project, command: str) -> Run:
         """Create and persist the parent run before child work exists."""
 
-    def plan_child_runs(self, run: Run, parent_agent_run: AgentRun) -> Sequence[AgentRun]:
-        """Create durable child agent-run records for independent worker execution."""
-
 
 class ModelGateway(Protocol):
     def complete(self, request: ModelRequest) -> ModelResponse:

@@ -1,4 +1,4 @@
-"""FastAPI control plane for the durable walking skeleton."""
+"""FastAPI control plane for the Rorven workbench."""
 
 from __future__ import annotations
 

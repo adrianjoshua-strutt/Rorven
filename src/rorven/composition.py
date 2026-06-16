@@ -12,7 +12,7 @@ from rorven.adapters.model import (
     load_model_profile_config,
 )
 from rorven.adapters.persistence import LocalFilePlatformStore
-from rorven.adapters.runtime import LangGraphAgentRuntime, LocalDeterministicRuntime
+from rorven.adapters.runtime import LangGraphAgentRuntime
 from rorven.application.ports import ModelGateway
 from rorven.application.services import ProjectService, RootService, WorkerService
 from rorven.env import load_local_env
@@ -70,7 +70,7 @@ def _create_model_gateway(store: LocalFilePlatformStore) -> ModelGateway:
     profiles = load_model_profile_config(profile_overrides=store.get_model_profile_ids())
     if gateway_mode not in {"auto", "openrouter"}:
         raise RuntimeError(
-            "Local/mock model gateway is disabled. Set RORVEN_MODEL_GATEWAY to 'auto' or 'openrouter'."
+            "Set RORVEN_MODEL_GATEWAY to 'auto' or 'openrouter'."
         )
     if not api_key:
         raise RuntimeError(f"{OPENROUTER_KEY_ENV} is required to start the model gateway")
@@ -81,12 +81,10 @@ def _create_model_gateway(store: LocalFilePlatformStore) -> ModelGateway:
     )
 
 
-def _create_runtime_adapter(store: LocalFilePlatformStore) -> LocalDeterministicRuntime | LangGraphAgentRuntime:
+def _create_runtime_adapter(store: LocalFilePlatformStore) -> LangGraphAgentRuntime:
     runtime_mode = os.environ.get("RORVEN_RUNTIME_ADAPTER", "langgraph").strip().lower()
-    if runtime_mode == "local-deterministic":
-        return LocalDeterministicRuntime(store)
     if runtime_mode in {"langgraph", "auto"}:
         return LangGraphAgentRuntime(store)
     raise RuntimeError(
-        f"RORVEN_RUNTIME_ADAPTER={runtime_mode!r} must be 'langgraph' or 'local-deterministic'"
+        f"RORVEN_RUNTIME_ADAPTER={runtime_mode!r} must be 'langgraph'"
     )

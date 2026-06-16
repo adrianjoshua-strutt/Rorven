@@ -104,6 +104,19 @@ class ProjectService:
     def submit_task(self, project_id: str, command: str) -> RunState:
         project = self._runs.get_project(project_id)
         run = self._runtime.start_parent_run(project, command)
+        parent = self._root_agent_run(project.id, run.id)
+        task = Task.create(parent.id)
+        self._tasks.enqueue(
+            [task],
+            [
+                Event.create(
+                    project.id,
+                    EventType.TASK_QUEUED,
+                    {"task_id": task.id, "agent_run_id": parent.id},
+                    run.id,
+                )
+            ],
+        )
         return self.get_run_state(project_id, run.id)
 
     def get_run_state(self, project_id: str, run_id: str) -> RunState:
@@ -183,14 +196,14 @@ class RootService:
         return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
 
     def _filtered_root_messages(self) -> list[dict[str, str]]:
-        legacy_bodies = {
+        hidden_seed_bodies = {
             "I manage the local Rorven installation. Ask me to create projects, find projects, inspect runs, or summarize workspace activity.",
             "Create a new project for this repository.",
         }
         return [
             message
             for message in self._root_messages.list_root_messages()
-            if str(message.get("body", "")).strip() not in legacy_bodies
+            if str(message.get("body", "")).strip() not in hidden_seed_bodies
         ]
 
     def _project_stats(self) -> list[dict[str, object]]:

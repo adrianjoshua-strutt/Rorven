@@ -1,6 +1,5 @@
 """Model provider adapters."""
 
-from rorven.adapters.model.local import LocalModelGateway
 from rorven.adapters.model.openrouter import OpenRouterModelGateway
 from rorven.adapters.model.profiles import (
     MODEL_PROFILE_NAMES,
@@ -10,7 +9,6 @@ from rorven.adapters.model.profiles import (
 )
 
 __all__ = [
-    "LocalModelGateway",
     "MODEL_PROFILE_NAMES",
     "ModelProfileConfig",
     "OPENROUTER_KEY_ENV",

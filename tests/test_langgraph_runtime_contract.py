@@ -57,22 +57,5 @@ class LangGraphRuntimeContractTests(unittest.TestCase):
         self.assertEqual("orchestrator", parent.definition.name)
         self.assertIsNone(parent.parent_agent_run_id)
 
-    def test_plan_child_runs_returns_empty_until_real_dispatch(self) -> None:
-        repository = CapturingRunRepository()
-        runtime = LangGraphAgentRuntime(repository)
-        project = Project.create(
-            "Example",
-            WorkspaceBinding("D:/workspaces", "D:/workspaces/example"),
-        )
-
-        run = runtime.start_parent_run(project, "Build a serious spine")
-        parent = repository.parent
-        assert parent is not None
-
-        children = runtime.plan_child_runs(run, parent)
-        self.assertEqual([], children)
-        self.assertEqual(0, len(repository.tasks))
-
-
 if __name__ == "__main__":
     unittest.main()

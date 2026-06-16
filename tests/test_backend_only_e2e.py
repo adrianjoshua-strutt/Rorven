@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -15,13 +16,19 @@ class BackendOnlyE2ETests(unittest.TestCase):
         self.data_dir = Path("test-output") / "tests" / f"backend-only-{uuid4()}"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        self.previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
         os.environ["RORVEN_DATA_DIR"] = str(self.data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
 
     def tearDown(self) -> None:
         if self.previous_data_dir is None:
             os.environ.pop("RORVEN_DATA_DIR", None)
         else:
             os.environ["RORVEN_DATA_DIR"] = self.previous_data_dir
+        if self.previous_key is None:
+            os.environ.pop("RORVEN_OPENROUTER_API_KEY", None)
+        else:
+            os.environ["RORVEN_OPENROUTER_API_KEY"] = self.previous_key
 
     def test_full_workflow_backend_only(self) -> None:
         """
@@ -89,9 +96,17 @@ class BackendOnlyE2ETests(unittest.TestCase):
         root_r_before = client.get("/root")
         messages_before = len(root_r_before.json()["root"]["messages"])
 
-        root_submit_r = client.post(
-            "/root/messages", json={"message": "E2E test message"}
-        )
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [{"message": {"role": "assistant", "content": "root result"}}],
+                "model": "test/model",
+                "usage": {"total_tokens": 5},
+            },
+        ):
+            root_submit_r = client.post(
+                "/root/messages", json={"message": "E2E test message"}
+            )
         assert root_submit_r.status_code == 200
         root_state = root_submit_r.json()["root"]
         messages_after = len(root_state["messages"])

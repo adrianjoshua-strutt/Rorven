@@ -65,7 +65,10 @@ class WorkerService:
                     )
                 ],
             )
-            self._complete_parent_if_ready(agent_run.project_id, agent_run.run_id)
+            if agent_run.parent_agent_run_id is None:
+                self._complete_root_run(agent_run.project_id, agent_run.run_id, finished_agent)
+            else:
+                self._complete_parent_if_ready(agent_run.project_id, agent_run.run_id)
             completed.append(task)
         return completed
 
@@ -123,6 +126,20 @@ class WorkerService:
                     EventType.RUN_FAILED,
                     {"task_id": task.id, "agent_run_id": agent_run.id},
                     agent_run.run_id,
+                )
+            ],
+        )
+
+    def _complete_root_run(self, project_id: str, run_id: str, root: AgentRun) -> None:
+        run = self._runs.get_run(project_id, run_id).transition(RunStatus.COMPLETED)
+        self._runs.update_run(
+            run,
+            [
+                Event.create(
+                    project_id,
+                    EventType.RUN_COMPLETED,
+                    {"run_id": run_id, "agent_run_id": root.id},
+                    run_id,
                 )
             ],
         )

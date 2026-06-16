@@ -1,4 +1,4 @@
-"""Worker entrypoint for local deterministic agent work."""
+"""Worker entrypoint for durable agent work."""
 
 from __future__ import annotations
 

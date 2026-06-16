@@ -6,9 +6,19 @@ import unittest
 from uuid import uuid4
 
 from rorven.adapters.persistence import LocalFilePlatformStore
-from rorven.adapters.runtime.local import LocalDeterministicRuntime
-from rorven.adapters.model.local import LocalModelGateway
+from rorven.adapters.runtime.langgraph import LangGraphAgentRuntime
+from rorven.application.modeling import ModelRequest, ModelResponse
 from rorven.application.services import ProjectService, WorkerService
+
+
+class TestModelGateway:
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        return ModelResponse(
+            content="test model result",
+            provider="test",
+            model="test/model",
+            usage={"total_tokens": 1},
+        )
 
 
 class LocalFileStoreTests(unittest.TestCase):
@@ -20,7 +30,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runs=store,
             events=store,
             tasks=store,
-            runtime=LocalDeterministicRuntime(store),
+            runtime=LangGraphAgentRuntime(store),
             artifacts=store,
         )
         worker = WorkerService(
@@ -28,7 +38,7 @@ class LocalFileStoreTests(unittest.TestCase):
             tasks=store,
             artifacts=store,
             events=store,
-            model_gateway=LocalModelGateway(),
+            model_gateway=TestModelGateway(),
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -40,14 +50,15 @@ class LocalFileStoreTests(unittest.TestCase):
             runs=reopened,
             events=reopened,
             tasks=reopened,
-            runtime=LocalDeterministicRuntime(reopened),
+            runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
         )
         reopened_state = reopened_projects.get_run_state(project.id, run_state.run.id)
 
         self.assertEqual("completed", reopened_state.run.status.value)
-        self.assertEqual(3, len(reopened_state.agent_runs))
+        self.assertEqual(1, len(reopened_state.agent_runs))
         self.assertEqual({"completed"}, {item.status.value for item in reopened_state.tasks})
+        self.assertEqual(1, len(reopened_state.artifacts))
         self.assertTrue((root / "state.json").exists())
 
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
@@ -58,7 +69,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runs=store,
             events=store,
             tasks=store,
-            runtime=LocalDeterministicRuntime(store),
+            runtime=LangGraphAgentRuntime(store),
             artifacts=store,
         )
 
@@ -70,7 +81,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runs=reopened,
             events=reopened,
             tasks=reopened,
-            runtime=LocalDeterministicRuntime(reopened),
+            runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
         )
 
@@ -87,7 +98,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runs=store,
             events=store,
             tasks=store,
-            runtime=LocalDeterministicRuntime(store),
+            runtime=LangGraphAgentRuntime(store),
             artifacts=store,
         )
 
