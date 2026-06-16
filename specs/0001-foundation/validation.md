@@ -37,9 +37,9 @@ Status: In progress
 - `2a11b24` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after moving project creation into a modal, adding settings, shrinking the composer, fixing project selection, and restoring subagent inspection through the main panel.
 - `2a11b24` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - `2a11b24` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
-- Current working tree - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after making root project selectable, stabilizing project selection, and presenting subagent work as a chat-like transcript view.
-- Current working tree - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
-- Current working tree - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
+- `89d4ebf` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after making root project selectable, stabilizing project selection, and presenting subagent work as a chat-like transcript view.
+- `89d4ebf` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- `89d4ebf` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
 
 ## Known deferred evidence
 
