@@ -1,6 +1,6 @@
 # Validation
 
-Validated implementation commit: pending
+Validated implementation commit: `94e5094`
 
 ## Evidence
 

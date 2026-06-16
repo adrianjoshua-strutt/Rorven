@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0005-proposal-only-write-tools
-last_verified_commit: 41723e4
+last_verified_commit: 94e5094
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
