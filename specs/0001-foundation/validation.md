@@ -9,7 +9,7 @@ Status: In progress
 - [ ] API restart recovery verified.
 - [ ] Worker loss recovery verified.
 - [ ] No duplicate child results verified.
-- [ ] UI reload reconstruction verified.
+- [x] UI reload reconstruction verified.
 - [x] Architecture boundaries verified.
 - [x] Model-profile-only agent definitions verified.
 - [ ] No raw secret persistence verified.
@@ -23,10 +23,15 @@ Status: In progress
 - Verified domain/application historical-schema branch scan.
 - Verified workspace binding rejects paths outside the allowed root and sibling-prefix escapes.
 - Verified local deterministic `AgentRuntime` contract creates one parent and two child agent runs with model-profile names only.
+- `658f235` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 9 tests passed.
+- Verified FastAPI project creation, run submission, worker pass, parent completion, task completion, and persisted state reload through the local file adapter.
+- Current working tree - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Current working tree - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed.
+- Verified React/Vite console can reconstruct project runs, run tree, tasks, and events from API state.
 
 ## Known deferred evidence
 
 - Real external model calls are deferred until the model-provider adapter slice.
 - LangGraph runtime behavior is deferred until the runtime-adapter slice.
 - Brokered secret use is deferred until the secret-store and tool-broker slice.
-- PostgreSQL migrations, durable task leases, API/worker restart recovery, and UI reload evidence are not yet implemented.
+- PostgreSQL migrations, full task lease recovery, and API/worker process restart recovery are not yet implemented.

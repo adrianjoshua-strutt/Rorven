@@ -9,14 +9,14 @@
 - [x] Add architecture checks for forbidden provider/framework imports and historical-schema branches in domain/application code.
 - [x] Define the first ports: `RunRepository`, `EventRepository`, `TaskQueue`, `AgentRuntime`, `ArtifactStore`, and `Clock`.
 - [ ] Add shared contract tests for the runtime adapter and task queue behavior used by this slice.
-- [ ] Scaffold the FastAPI API and worker process.
-- [ ] Scaffold the React/Vite project page and run tree.
+- [x] Scaffold the FastAPI API and worker process.
+- [x] Scaffold the React/Vite project page and run tree.
 - [ ] Implement PostgreSQL repositories and durable task leases.
 - [x] Implement a local deterministic `AgentRuntime` adapter that creates one parent run and two child runs through platform-owned records.
-- [ ] Implement run event retrieval and UI reconstruction from persisted state.
-- [ ] Implement parent join and final artifact creation.
+- [x] Implement run event retrieval and UI reconstruction from persisted state.
+- [x] Implement parent join and final artifact creation.
 - [ ] Add API restart, worker lease-recovery, duplicate-result, UI reload, and migration tests.
-- [ ] Record validation evidence and unresolved limitations.
+- [x] Record validation evidence and unresolved limitations.
 
 ## Deferred tasks
 
