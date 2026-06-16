@@ -36,6 +36,31 @@ The system targets one current canonical model. Updates migrate first-party data
 - Docker-based project sandboxes
 - API, worker, and scheduler as separate processes in one modular monolith
 
+## Run with OpenRouter
+
+Rorven loads a root `.env` file for local API and worker processes. Create `.env` from
+`.env.example`, then set:
+
+```powershell
+RORVEN_OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Optional model-profile pins can be set with:
+
+```powershell
+RORVEN_MODEL_PROFILE_BALANCED=provider/model-id
+RORVEN_MODEL_PROFILE_REASONING=provider/model-id
+```
+
+If no profile model is pinned, the OpenRouter adapter omits `model` and lets the
+provider route the request. Without `RORVEN_OPENROUTER_API_KEY`, Rorven uses the local
+model gateway so the durable worker path can still be tested without external calls.
+
+The current worker creates durable subagent runs, calls the configured model gateway,
+stores the returned text as artifacts, and exposes that text in the console when a
+subagent is selected. This is not yet a tool-capable coding agent: filesystem, shell,
+sandbox, memory, and brokered tool execution are separate slices.
+
 ## Bootstrap with Codex
 
 Open this folder in VS Code and give Codex the prompt in `CODEX_BOOTSTRAP_PROMPT.md`. Agents should work in small validated steps, update the active feature evidence, and preserve the adapter boundaries rather than wiring providers directly into core code.

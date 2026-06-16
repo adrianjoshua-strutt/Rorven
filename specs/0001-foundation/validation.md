@@ -59,10 +59,15 @@ Status: In progress
 - Verified `apps/web/src/main.tsx` is only the React bootstrap, console screens live under `apps/web/src/components`, controller state lives under `apps/web/src/hooks`, and shared helpers live under `apps/web/src/utils`.
 - Verified `apps/api/rorven_api/main.py` only builds the FastAPI app while routes, serializers, and request schemas live in separate modules.
 - Verified chat bubbles and agent work entries wrap long content and stay inside fixed-height scroll regions.
+- `5fbbb63` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 15 tests passed after adding the provider-neutral model gateway, OpenRouter adapter, model-backed worker artifacts, artifact text in API run state, and local state migration for the artifacts bucket.
+- `5fbbb63` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after rendering persisted agent artifact text in subagent and orchestrator chat surfaces.
+- `5fbbb63` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Verified the OpenRouter adapter sends chat-completions requests through a model-profile mapping and does not expose the configured API key in adapter responses.
+- Verified `/settings` reports OpenRouter credential presence and active model gateway without returning the raw `RORVEN_OPENROUTER_API_KEY` value.
+- Verified workers persist model gateway output as text artifacts and the console displays those artifact contents when a subagent is selected.
 
 ## Known deferred evidence
 
-- Real external model calls are deferred until the model-provider adapter slice.
 - LangGraph runtime behavior is deferred until the runtime-adapter slice.
 - Brokered secret use is deferred until the secret-store and tool-broker slice.
-- PostgreSQL migrations, full task lease recovery, and API/worker process restart recovery are not yet implemented.
+- Filesystem/shell tools, Docker sandboxing, PostgreSQL migrations, full task lease recovery, and API/worker process restart recovery are not yet implemented.

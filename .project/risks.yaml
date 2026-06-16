@@ -51,3 +51,7 @@ risks:
     title: Product surfaces accumulate oversized files
     severity: medium
     mitigation: keep UI screens split into components, hooks, and typed helpers; keep API entrypoints thin with schemas, serializers, and routes in separate modules
+  - id: R-014
+    title: Model-backed subagents are mistaken for tool-capable agents
+    severity: high
+    mitigation: keep prompts explicit that this slice has no filesystem or shell tools; implement brokered tools and sandbox policy before allowing code-changing claims

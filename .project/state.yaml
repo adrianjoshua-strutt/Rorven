@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0001-foundation
-last_verified_commit: acc03d3
+last_verified_commit: 5fbbb63
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -40,4 +40,6 @@ next_required_gates:
   - module-map-for-first-slice
   - migration-skeleton-plan
   - validation-plan-for-walking-skeleton
+  - postgres-repository-slice
+  - tool-broker-and-sandbox-slice
 last_updated: '2026-06-16'
