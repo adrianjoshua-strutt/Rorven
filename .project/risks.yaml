@@ -54,7 +54,7 @@ risks:
   - id: R-014
     title: Model-backed subagents are mistaken for tool-capable agents
     severity: high
-    mitigation: keep prompts explicit that this slice has no filesystem or shell tools; implement brokered tools and sandbox policy before allowing code-changing claims
+    mitigation: keep prompts explicit that this slice has only read-only workspace tools; implement approvals, sandbox policy, and mutable tool audit before allowing code-changing claims
   - id: R-015
     title: No worker task execution loop means projects silently queue without progressing
     severity: high

@@ -61,6 +61,20 @@ Preferred flow:
 Agent -> Tool Broker -> Permission Engine -> Credential Broker -> Tool Adapter -> External Service
 ```
 
+The first implemented tool slice is local read-only workspace inspection:
+
+- `ToolBroker` is the application-owned port for tool execution.
+- `ToolPolicy` is the application-owned port for authorization decisions.
+- Product composition wires `WorkspaceReadPolicy` and `LocalWorkspaceToolBroker`.
+- Child agents may request one round of `workspace.list_files` or
+  `workspace.read_text_file`.
+- Root orchestrators may not invoke workspace tools directly.
+- Sensitive-looking paths such as `.env`, `.git`, key, token, secret, or
+  credential files are denied before execution.
+- Tool requests, denials, completions, failures, and output artifacts are persisted
+  for run inspection.
+- No write, shell, git, browser, network, or secret-bearing tools exist yet.
+
 ## Redaction
 
 Central redaction is mandatory for tool outputs, exceptions, logs, events, and traces. Redaction is a defense-in-depth control and not a substitute for avoiding disclosure.

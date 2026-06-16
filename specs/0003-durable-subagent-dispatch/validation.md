@@ -21,6 +21,6 @@ Result: build passed.
 ## Remaining Limitations
 
 - Reviewer and implementer definitions are application constants, not immutable external definition records yet.
-- Subagents have no brokered workspace tools.
+- Read-only brokered workspace tools were implemented later in `specs/0004-read-only-workspace-tools`.
 - No sandbox or permission-profile evaluation for tool calls exists yet.
 - Local JSON persistence remains the temporary system of record.

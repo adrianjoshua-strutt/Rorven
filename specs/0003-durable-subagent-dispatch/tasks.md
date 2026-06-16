@@ -10,6 +10,6 @@
 - [x] Fail the parent run when child work fails.
 - [x] Surface child assignments in the UI inspection view.
 - [ ] Add immutable definition storage for agent/workflow/prompt versions.
-- [ ] Add brokered read-only workspace tools.
+- [x] Add brokered read-only workspace tools. Superseded by `0004-read-only-workspace-tools`.
 - [ ] Add policy evaluation for tool calls.
 - [ ] Move persistence to Postgres.

@@ -23,6 +23,18 @@
 - global kill switch
 - immutable audit events
 
+## Current tool surface
+
+The current product surface exposes only brokered read-only workspace inspection
+for child agents:
+
+- `workspace.list_files`
+- `workspace.read_text_file`
+
+The local adapter confines paths to the project workspace root, skips common heavy
+directories, blocks obvious secret paths, and caps file and listing output. This is
+not a sandbox boundary and does not authorize writes or shell execution.
+
 ## Threats to test
 
 - prompt injection requesting secret access

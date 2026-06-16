@@ -4,7 +4,7 @@ This note is operational context for the next agent. It does not override the co
 
 ## Current Direction
 
-The old `specs/0001-foundation` dossier was removed because it encouraged synthetic behavior. The active dossier is now `specs/0003-durable-subagent-dispatch`.
+The old `specs/0001-foundation` dossier was removed because it encouraged synthetic behavior. The active dossier is now `specs/0004-read-only-workspace-tools`.
 
 The product should keep the adapter-based architecture, but product composition must not use local deterministic model/runtime shims to make a demo look alive.
 
@@ -19,11 +19,15 @@ The product should keep the adapter-based architecture, but product composition 
 - The orchestrator can dispatch reviewer and implementer child runs with persisted assignment artifacts.
 - Workers execute child tasks independently; when all children complete, the root orchestrator summarizes their persisted result artifacts.
 - Malformed dispatch output and failed child work now fail the overall run instead of leaving it waiting.
+- Child agents can request one brokered round of read-only workspace tools.
+- `WorkspaceReadPolicy` denies root-agent tool use, unsupported tools, oversized requests, and obvious secret paths.
+- `LocalWorkspaceToolBroker` confines paths to the project workspace and supports `workspace.list_files` and `workspace.read_text_file`.
+- Tool requests, denials, completions, failures, and outputs are persisted as events/artifacts.
 - Tests were rewritten so project runs expect one real root orchestrator task, not fabricated reviewer/implementer subagents.
 - Root dashboard activity remains empty unless real root activities are persisted.
 - Architecture docs and `.project/state.yaml` now describe the real limits.
 
-Latest implementation commit: `c2ab911`.
+Latest implementation commit: `008a137`.
 
 ## Validation
 
@@ -32,7 +36,7 @@ $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 28 tests passed.
+Result: 32 tests passed.
 
 ```powershell
 cd apps/web
@@ -44,17 +48,17 @@ Result: build passed.
 ## Still Not Done
 
 - No versioned external agent-definition store yet; reviewer/implementer definitions are application constants.
-- No brokered filesystem, shell, git, browser, or sandbox tools.
+- No write/edit, shell, git, browser, network, approval, or sandbox tools.
 - No Postgres repository implementation.
 - No project memory implementation.
 - The root project can call the model gateway, but cannot yet autonomously create projects through brokered project-management tools.
 
 ## Next Best Slice
 
-Implement brokered project tools:
+Implement safe write/edit tools:
 
-1. Define permission profiles and a minimal policy evaluator for tool calls.
-2. Add a provider-neutral tool broker port.
-3. Add sandbox-backed read-only workspace inspection first.
-4. Persist tool calls, outputs, approvals, and audit events.
-5. Only then allow agents to claim file inspection or edits.
+1. Add explicit approval and policy records for mutable actions.
+2. Add a sandbox-backed file-edit proposal/apply flow.
+3. Persist diffs, approvals, and idempotency keys.
+4. Add recovery tests around interrupted edits.
+5. Only then allow agents to claim file edits.
