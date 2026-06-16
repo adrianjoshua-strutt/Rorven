@@ -49,6 +49,10 @@ Status: In progress
 - `0f1032f` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
 - Verified root project is represented as a normal chat surface with root-scoped subagent activity rather than a dashboard.
 - Verified chat composers use fixed-height Mantine textareas so empty chat state does not resize the input.
+- `d7f2673` - `python -m unittest discover -s tests` with `PYTHONPATH=src;apps/api;apps/worker`: 13 tests passed after stabilizing project list order, duplicate workspace rejection, and repo-local data directory resolution.
+- `d7f2673` - `npm.cmd run build` in `apps/web`: TypeScript and Vite production build passed after preserving project list order on selection.
+- `d7f2673` - `npm.cmd audit --json` in `apps/web`: 0 vulnerabilities reported.
+- Verified clicking a project no longer reorders the project list under the cursor; selected project rows are highlighted in place.
 
 ## Known deferred evidence
 
