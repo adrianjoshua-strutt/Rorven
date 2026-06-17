@@ -16,3 +16,4 @@ apps/web/test-results/
 test-output/
 *.log
 .DS_Store
+/workspace
