@@ -63,3 +63,7 @@ risks:
     title: Approved local workspace apply lacks sandbox and recovery hardening
     severity: high
     mitigation: keep apply behind explicit approval records; add idempotency keys, interrupted-apply recovery tests, and sandbox isolation before expanding mutable tools
+  - id: R-017
+    title: Root project-management tools execute from model-requested actions
+    severity: high
+    mitigation: require strict provider-neutral root tool contracts, validate payloads in the application layer, and keep filesystem effects scoped to configured operator settings
