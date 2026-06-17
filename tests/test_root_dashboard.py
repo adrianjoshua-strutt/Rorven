@@ -4,6 +4,7 @@ import importlib
 import os
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -96,6 +97,53 @@ class RootDashboardTests(unittest.TestCase):
         project_ids = {project["id"] for project in projects_response.json()["projects"]}
         self.assertIn(created_id, project_ids)
         self.assertEqual(2, len(project_ids))
+
+    def test_root_messages_are_stored_as_plain_chat_text(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-plain-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                "**Live Project Inventory:**  \n"
+                                "- No projects currently registered.\n\n"
+                                "**Operational Response:**\n"
+                                "Use the Project button to register the workspace."
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 9},
+            },
+        ):
+            response = client.post(
+                "/root/messages",
+                json={"message": "can you create a project for me on my desktop?"},
+            )
+
+        self.assertEqual(200, response.status_code)
+        messages = response.json()["root"]["messages"]
+        assistant = messages[-1]
+
+        self.assertEqual("Root orchestrator", assistant["title"])
+        self.assertNotIn("**", assistant["body"])
+        self.assertNotIn("- No projects", assistant["body"])
+        self.assertIn("Live Project Inventory:", assistant["body"])
 
 
 if __name__ == "__main__":

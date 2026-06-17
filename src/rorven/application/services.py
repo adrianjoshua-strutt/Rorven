@@ -337,18 +337,18 @@ class RootService:
                 messages=(
                     ModelMessage(
                         "system",
-                        "You are the root orchestrator for the Rorven control plane. Summarize live workspace inventory and answer operationally.",
+                        _root_system_prompt(),
                     ),
                     ModelMessage("user", _build_root_prompt(projects, message)),
                 ),
-                max_output_tokens=500,
+                max_output_tokens=240,
             )
         )
         assistant_message = {
             "id": f"root-orchestrator-{len(self._root_messages.list_root_messages()) + 1}",
             "side": "orchestrator",
             "title": "Root orchestrator",
-            "body": response.content.strip(),
+            "body": _normalize_root_response(response.content),
             "time": _current_iso(),
             "status": response.provider,
         }
@@ -382,6 +382,21 @@ class RootService:
             )
         return projects
 
+
+def _root_system_prompt() -> str:
+    return "\n".join(
+        [
+            "You are the root project orchestrator for Rorven.",
+            "The root project helps the operator find, register, and inspect projects.",
+            "Current limitation: this chat cannot yet create or register projects by itself.",
+            "If the user asks to create/register a project, ask only for the missing project name and exact workspace folder path, and mention that the Project button can register it now.",
+            "Write for an application chat bubble, not a document.",
+            "Use plain text only: no Markdown, no bold markers, no headings, no bullet lists, no code fences.",
+            "Answer in one to three short sentences.",
+        ]
+    )
+
+
 def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> str:
     lines = [
         f"User request: {command}",
@@ -392,9 +407,25 @@ def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> s
             f"- {project['name']} at {project['workspace_root']}: {project['runs']} runs, {project['active_runs']} active, {project['completed_runs']} completed"
         )
     lines.append(
-        "Respond as the root orchestrator for the Rorven control plane. Keep it operational and concise."
+        "Respond plainly as the root project orchestrator. Do not format with Markdown."
     )
     return "\n".join(lines)
+
+
+def _normalize_root_response(content: str) -> str:
+    lines: list[str] = []
+    for raw_line in content.strip().splitlines():
+        line = raw_line.strip()
+        if not line:
+            if lines and lines[-1]:
+                lines.append("")
+            continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        line = line.replace("**", "").replace("__", "").replace("`", "")
+        lines.append(line.rstrip())
+    normalized = "\n".join(lines).strip()
+    return normalized or "I could not produce a usable root project response."
 
 
 def _current_iso() -> str:
