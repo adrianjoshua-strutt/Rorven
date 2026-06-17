@@ -102,6 +102,7 @@ export type SettingsSnapshot = {
   };
   project_defaults: {
     workspace_root_source: string;
+    workspace_base_root: string;
     memory_backend: string;
     sandbox: string;
   };
@@ -167,6 +168,16 @@ export async function listProjects(): Promise<Project[]> {
 
 export async function getSettings(): Promise<SettingsSnapshot> {
   const payload = await request<{ settings: SettingsSnapshot }>("/settings");
+  return payload.settings;
+}
+
+export async function updateProjectDefaults(input: {
+  workspace_base_root: string;
+}): Promise<SettingsSnapshot> {
+  const payload = await request<{ settings: SettingsSnapshot }>("/settings/project-defaults", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   return payload.settings;
 }
 

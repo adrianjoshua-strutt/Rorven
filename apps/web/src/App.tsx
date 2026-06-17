@@ -56,6 +56,9 @@ export function App() {
             loadState={consoleState.settingsLoadState}
             settings={consoleState.settingsSnapshot}
             onReload={() => void consoleState.loadSettings()}
+            onUpdateWorkspaceBaseRoot={(value) =>
+              void consoleState.handleUpdateWorkspaceBaseRoot(value)
+            }
           />
         ) : (
           <ProjectChatView

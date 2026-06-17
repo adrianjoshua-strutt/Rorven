@@ -14,11 +14,13 @@ export function SettingsView({
   loadState,
   apiEndpoint,
   onReload,
+  onUpdateWorkspaceBaseRoot,
 }: {
   settings: SettingsSnapshot | null;
   loadState: LoadState;
   apiEndpoint: string;
   onReload: () => void;
+  onUpdateWorkspaceBaseRoot: (workspaceBaseRoot: string) => void;
 }) {
   const credential = settings?.credentials[0] ?? null;
   const showMissingCredentialPrompt = credential?.configured === false;
@@ -57,7 +59,10 @@ export function SettingsView({
         <ModelProfilesSection settings={settings} />
         <RuntimeSection apiEndpoint={apiEndpoint} settings={settings} />
         <SafetyPolicySection settings={settings} />
-        <ProjectDefaultsSection settings={settings} />
+        <ProjectDefaultsSection
+          settings={settings}
+          onUpdateWorkspaceBaseRoot={onUpdateWorkspaceBaseRoot}
+        />
       </div>
     </section>
   );

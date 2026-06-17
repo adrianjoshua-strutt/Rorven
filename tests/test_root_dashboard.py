@@ -133,7 +133,7 @@ class RootDashboardTests(unittest.TestCase):
         ):
             response = client.post(
                 "/root/messages",
-                json={"message": "can you create a project for me on my desktop?"},
+                json={"message": "summarize the current project inventory"},
             )
 
         self.assertEqual(200, response.status_code)
@@ -144,6 +144,66 @@ class RootDashboardTests(unittest.TestCase):
         self.assertNotIn("**", assistant["body"])
         self.assertNotIn("- No projects", assistant["body"])
         self.assertIn("Live Project Inventory:", assistant["body"])
+
+    def test_root_chat_creates_project_under_configured_workspace_base(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-create-{uuid4()}" / "state"
+        workspace_base = data_dir.parent / "workspaces"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+        settings_response = client.post(
+            "/settings/project-defaults",
+            json={"workspace_base_root": str(workspace_base.resolve())},
+        )
+        self.assertEqual(200, settings_response.status_code)
+
+        response = client.post(
+            "/root/messages",
+            json={"message": "create a project called Alpha Build"},
+        )
+
+        self.assertEqual(200, response.status_code)
+        assistant = response.json()["root"]["messages"][-1]
+        self.assertEqual("local", assistant["status"])
+        self.assertIn("Created project Alpha Build", assistant["body"])
+        self.assertTrue((workspace_base / "Alpha-Build").is_dir())
+
+        projects_response = client.get("/projects")
+        projects = projects_response.json()["projects"]
+        self.assertEqual(1, len(projects))
+        self.assertEqual("Alpha Build", projects[0]["name"])
+        self.assertEqual(str(workspace_base.resolve()), projects[0]["workspace"]["allowed_root"])
+
+    def test_root_chat_asks_for_name_before_creating_project(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-create-missing-name-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        response = client.post(
+            "/root/messages",
+            json={"message": "can you create a project on my desktop for me?"},
+        )
+
+        self.assertEqual(200, response.status_code)
+        assistant = response.json()["root"]["messages"][-1]
+        self.assertEqual("local", assistant["status"])
+        self.assertIn("What should it be called?", assistant["body"])
+        self.assertEqual([], client.get("/projects").json()["projects"])
 
 
 if __name__ == "__main__":

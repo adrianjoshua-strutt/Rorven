@@ -80,6 +80,34 @@ class ApiSettingsTests(unittest.TestCase):
         self.assertTrue(by_name["utility"]["model_id_configured"])
         self.assertEqual("state.json", by_name["utility"]["source"])
 
+    def test_project_default_workspace_base_root_is_persisted(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"settings-project-defaults-{uuid4()}"
+        workspace_base = data_dir / "workspaces"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        update_response = client.post(
+            "/settings/project-defaults",
+            json={"workspace_base_root": str(workspace_base.resolve())},
+        )
+        self.assertEqual(200, update_response.status_code)
+
+        settings_response = client.get("/settings")
+        self.assertEqual(200, settings_response.status_code)
+        payload = settings_response.json()["settings"]
+        self.assertEqual(
+            str(workspace_base.resolve()),
+            payload["project_defaults"]["workspace_base_root"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

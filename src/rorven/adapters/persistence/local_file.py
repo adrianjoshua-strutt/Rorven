@@ -19,6 +19,7 @@ from rorven.application.ports import (
     ApprovalRepository,
     ArtifactStore,
     EventRepository,
+    ProjectDefaultsRepository,
     RunRepository,
     TaskQueue,
 )
@@ -51,9 +52,11 @@ class LocalFilePlatformStore(
     TaskQueue,
     ArtifactStore,
     ApprovalRepository,
+    ProjectDefaultsRepository,
 ):
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, default_workspace_base_root: str | None = None) -> None:
         self._root = root
+        self._default_workspace_base_root = default_workspace_base_root or str(Path.cwd().resolve())
         self._state_path = root / "state.json"
         self._artifact_root = root / "artifacts"
         self._lock = RLock()
@@ -367,6 +370,36 @@ class LocalFilePlatformStore(
                     profiles.pop(name, None)
             self._write_state(state)
 
+    def get_workspace_base_root(self) -> str:
+        with self._lock:
+            state = self._read_state()
+            settings = state.get("settings")
+            if not isinstance(settings, dict):
+                return self._default_workspace_base_root
+            project_defaults = settings.get("project_defaults")
+            if not isinstance(project_defaults, dict):
+                return self._default_workspace_base_root
+            value = project_defaults.get("workspace_base_root")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            return self._default_workspace_base_root
+
+    def set_workspace_base_root(self, workspace_base_root: str) -> None:
+        if not workspace_base_root.strip():
+            raise ValueError("workspace_base_root is required")
+        with self._lock:
+            state = self._read_state()
+            settings = state.setdefault("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
+                state["settings"] = settings
+            project_defaults = settings.setdefault("project_defaults", {})
+            if not isinstance(project_defaults, dict):
+                project_defaults = {}
+                settings["project_defaults"] = project_defaults
+            project_defaults["workspace_base_root"] = str(Path(workspace_base_root).resolve())
+            self._write_state(state)
+
     def get_text(self, artifact_id: str) -> str:
         with self._lock:
             state = self._read_state()
@@ -424,6 +457,9 @@ class LocalFilePlatformStore(
             "root_messages": [],
             "settings": {
                 "model_profiles": {},
+                "project_defaults": {
+                    "workspace_base_root": self._default_workspace_base_root,
+                },
             },
         }
 
@@ -444,6 +480,16 @@ class LocalFilePlatformStore(
         if not isinstance(profiles, dict):
             settings["model_profiles"] = {}
             profiles = settings["model_profiles"]
+            changed = True
+        project_defaults = settings.get("project_defaults")
+        if not isinstance(project_defaults, dict):
+            settings["project_defaults"] = {}
+            project_defaults = settings["project_defaults"]
+            changed = True
+        if not isinstance(project_defaults.get("workspace_base_root"), str) or not project_defaults[
+            "workspace_base_root"
+        ].strip():
+            project_defaults["workspace_base_root"] = self._default_workspace_base_root
             changed = True
 
         # Seed product defaults into persisted settings so model routing is explicit

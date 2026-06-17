@@ -14,6 +14,7 @@ from rorven.adapters.model import (
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime import LangGraphAgentRuntime
 from rorven.adapters.tools import LocalWorkspaceToolBroker
+from rorven.adapters.workspace import LocalWorkspaceProvisioner
 from rorven.application.ports import ModelGateway
 from rorven.application.services import ApprovalService, ProjectService, RootService, WorkerService
 from rorven.application.tools import WorkspaceReadPolicy
@@ -33,28 +34,40 @@ class LocalServices:
 def create_local_services(data_dir: Path | None = None) -> LocalServices:
     load_local_env()
     root = data_dir or _default_data_dir()
-    store = LocalFilePlatformStore(root)
+    workspace_provisioner = LocalWorkspaceProvisioner(Path.cwd())
+    store = LocalFilePlatformStore(
+        root,
+        default_workspace_base_root=workspace_provisioner.default_workspace_base_root(),
+    )
     runtime = _create_runtime_adapter(store)
     model_gateway = _create_model_gateway(store)
     tool_broker = LocalWorkspaceToolBroker()
+    projects = ProjectService(
+        runs=store,
+        events=store,
+        tasks=store,
+        runtime=runtime,
+        artifacts=store,
+        approvals=store,
+    )
     return LocalServices(
         data_dir=root,
         store=store,
-        projects=ProjectService(
-            runs=store,
-            events=store,
-            tasks=store,
-            runtime=runtime,
-            artifacts=store,
-            approvals=store,
-        ),
+        projects=projects,
         approvals=ApprovalService(
             runs=store,
             approvals=store,
             artifacts=store,
             tool_broker=tool_broker,
         ),
-        root=RootService(runs=store, root_messages=store, model_gateway=model_gateway),
+        root=RootService(
+            runs=store,
+            root_messages=store,
+            model_gateway=model_gateway,
+            projects=projects,
+            project_defaults=store,
+            workspace_provisioner=workspace_provisioner,
+        ),
         worker=WorkerService(
             runs=store,
             tasks=store,

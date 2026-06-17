@@ -97,6 +97,14 @@ class ArtifactStore(Protocol):
         """Return artifact text content by ID."""
 
 
+class WorkspaceProvisioner(Protocol):
+    def default_workspace_base_root(self) -> str:
+        """Return the process default base directory for root-created projects."""
+
+    def ensure_directory(self, workspace_root: str) -> None:
+        """Create the workspace directory if it does not exist."""
+
+
 class ApprovalRepository(Protocol):
     def add_approval(self, approval: Approval, event: Event) -> None:
         """Persist a pending approval request and its lifecycle event."""
@@ -147,3 +155,11 @@ class RootDashboardRepository(Protocol):
 
     def append_root_message(self, message: dict[str, str]) -> None:
         """Persist one root-dashboard message."""
+
+
+class ProjectDefaultsRepository(Protocol):
+    def get_workspace_base_root(self) -> str:
+        """Return the configured base directory for root-created projects."""
+
+    def set_workspace_base_root(self, workspace_base_root: str) -> None:
+        """Persist the configured base directory for root-created projects."""

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from pathlib import Path
+import re
 from typing import Sequence
 
 from rorven.application.modeling import ModelMessage, ModelRequest
@@ -12,11 +14,13 @@ from rorven.application.ports import (
     ApprovalRepository,
     ArtifactStore,
     EventRepository,
+    ProjectDefaultsRepository,
     RunRepository,
     RootDashboardRepository,
     TaskQueue,
     ModelGateway,
     ToolBroker,
+    WorkspaceProvisioner,
 )
 from rorven.application.tools import ToolExecutionResult, ToolRequest
 from rorven.application.worker_service import WorkerService
@@ -311,10 +315,16 @@ class RootService:
         runs: RunRepository,
         root_messages: RootDashboardRepository,
         model_gateway: ModelGateway,
+        projects: ProjectService,
+        project_defaults: ProjectDefaultsRepository,
+        workspace_provisioner: WorkspaceProvisioner,
     ) -> None:
         self._runs = runs
         self._root_messages = root_messages
         self._model_gateway = model_gateway
+        self._projects = projects
+        self._project_defaults = project_defaults
+        self._workspace_provisioner = workspace_provisioner
 
     def get_root_state(self) -> RootDashboardState:
         messages = self._filtered_root_messages()
@@ -329,6 +339,19 @@ class RootService:
             "time": _current_iso(),
         }
         self._root_messages.append_root_message(user_message)
+        local_response = self._try_create_project_from_root_message(message)
+        if local_response is not None:
+            assistant_message = {
+                "id": f"root-orchestrator-{len(self._root_messages.list_root_messages()) + 1}",
+                "side": "orchestrator",
+                "title": "Root orchestrator",
+                "body": local_response,
+                "time": _current_iso(),
+                "status": "local",
+            }
+            self._root_messages.append_root_message(assistant_message)
+            return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
+
         projects = self._project_stats()
         response = self._model_gateway.complete(
             ModelRequest(
@@ -354,6 +377,29 @@ class RootService:
         }
         self._root_messages.append_root_message(assistant_message)
         return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
+
+    def _try_create_project_from_root_message(self, message: str) -> str | None:
+        if not _looks_like_project_creation(message):
+            return None
+        base_root = Path(self._project_defaults.get_workspace_base_root()).resolve()
+        request = _parse_project_creation_request(message, base_root)
+        if request.name is None:
+            return (
+                "I can create that project. What should it be called? "
+                f"I will place it under {base_root} unless you change the workspace base in Settings."
+            )
+        workspace_root = (request.workspace_root or (base_root / _project_folder_name(request.name))).resolve()
+        if not _is_inside(base_root, workspace_root):
+            return (
+                f"That folder is outside the configured workspace base: {base_root}. "
+                "Change the workspace base in Settings first, then ask me again."
+            )
+        try:
+            self._workspace_provisioner.ensure_directory(str(workspace_root))
+            project = self._projects.create_project(request.name, str(base_root), str(workspace_root))
+        except ValueError as exc:
+            return str(exc)
+        return f"Created project {project.name} at {project.workspace.workspace_root}."
 
     def _filtered_root_messages(self) -> list[dict[str, str]]:
         hidden_seed_bodies = {
@@ -388,8 +434,7 @@ def _root_system_prompt() -> str:
         [
             "You are the root project orchestrator for Rorven.",
             "The root project helps the operator find, register, and inspect projects.",
-            "Current limitation: this chat cannot yet create or register projects by itself.",
-            "If the user asks to create/register a project, ask only for the missing project name and exact workspace folder path, and mention that the Project button can register it now.",
+            "Root-local actions create or register projects before model responses are requested.",
             "Write for an application chat bubble, not a document.",
             "Use plain text only: no Markdown, no bold markers, no headings, no bullet lists, no code fences.",
             "Answer in one to three short sentences.",
@@ -426,6 +471,83 @@ def _normalize_root_response(content: str) -> str:
         lines.append(line.rstrip())
     normalized = "\n".join(lines).strip()
     return normalized or "I could not produce a usable root project response."
+
+
+@dataclass(frozen=True, slots=True)
+class _ProjectCreationRequest:
+    name: str | None
+    workspace_root: Path | None
+
+
+def _looks_like_project_creation(message: str) -> bool:
+    lowered = message.lower()
+    return "project" in lowered and any(
+        phrase in lowered for phrase in ("create", "new", "make", "register", "add")
+    )
+
+
+def _parse_project_creation_request(message: str, base_root: Path) -> _ProjectCreationRequest:
+    path = _extract_workspace_path(message, base_root)
+    name = _extract_project_name(message)
+    if name is None and path is not None and path.name:
+        name = _humanize_project_name(path.name)
+    return _ProjectCreationRequest(name=name, workspace_root=path)
+
+
+def _extract_project_name(message: str) -> str | None:
+    quoted = re.search(r'["“](.+?)["”]', message)
+    if quoted:
+        return quoted.group(1).strip()
+    named = re.search(r"\b(?:called|named)\s+([A-Za-z0-9][\w .-]{1,80})", message, re.IGNORECASE)
+    if named:
+        return _trim_name_stop_words(named.group(1))
+    project = re.search(r"\bproject\s+([A-Za-z0-9][\w .-]{1,80})", message, re.IGNORECASE)
+    if project:
+        candidate = _trim_name_stop_words(project.group(1))
+        if candidate and candidate.lower() not in {"for me", "on my desktop", "on desktop"}:
+            return candidate
+    return None
+
+
+def _trim_name_stop_words(value: str) -> str | None:
+    cleaned = re.split(r"\b(?:at|in|under|inside|on|for)\b", value, maxsplit=1, flags=re.IGNORECASE)[0]
+    cleaned = cleaned.strip(" .")
+    return cleaned or None
+
+
+def _extract_workspace_path(message: str, base_root: Path) -> Path | None:
+    windows_path = re.search(r"([A-Za-z]:[\\/][^\n\r\"']+)", message)
+    if windows_path:
+        return Path(windows_path.group(1).strip().rstrip(" ."))
+    path_after_keyword = re.search(
+        r"\b(?:at|in|under|inside)\s+([~./\\A-Za-z0-9][^\n\r\"']+)",
+        message,
+        re.IGNORECASE,
+    )
+    if path_after_keyword:
+        raw = path_after_keyword.group(1).strip().rstrip(" .")
+        if raw.lower() in {"desktop", "my desktop", "the desktop"}:
+            return None
+        path = Path(raw)
+        return path if path.is_absolute() else base_root / path
+    return None
+
+
+def _humanize_project_name(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").strip() or value
+
+
+def _project_folder_name(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._ -]+", "", value).strip().replace(" ", "-")
+    return normalized or "project"
+
+
+def _is_inside(base_root: Path, workspace_root: Path) -> bool:
+    try:
+        workspace_root.relative_to(base_root)
+    except ValueError:
+        return False
+    return True
 
 
 def _current_iso() -> str:

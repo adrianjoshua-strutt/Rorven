@@ -81,6 +81,14 @@ The first implemented tool slice is local read-only workspace inspection:
   for run inspection.
 - No shell, git, browser, network, or secret-bearing tools exist yet.
 
+## Root project provisioning
+
+The root project may create and register local projects through the
+`WorkspaceProvisioner` port. The local adapter can create directories only under
+the configured workspace base root stored in project defaults. Changing that base
+is an operator settings action; root chat rejects project paths outside the
+configured base.
+
 ## Redaction
 
 Central redaction is mandatory for tool outputs, exceptions, logs, events, and traces. Redaction is a defense-in-depth control and not a substitute for avoiding disclosure.

@@ -589,6 +589,13 @@ button:focus-visible {
   padding-top: 0;
 }
 
+.settings-inline-form {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  margin-bottom: 12px;
+}
+
 .settings-section-title {
   display: flex;
   align-items: flex-start;

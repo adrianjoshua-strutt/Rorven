@@ -33,6 +33,8 @@ current_decisions:
   initial_tool_adapter: local-workspace-inspection-and-proposals
   approval_abstraction: ApprovalRepository
   initial_approval_adapter: local-file-store-state-json
+  workspace_provisioning_abstraction: WorkspaceProvisioner
+  initial_workspace_provisioning_adapter: local-filesystem-scoped-base-root
   memory_abstraction: MemoryBackend
   initial_memory_backend: postgres
   sandbox_abstraction: SandboxProvider
@@ -57,6 +59,7 @@ next_required_gates:
   - postgres-repository-slice
   - approval-ui-slice
   - tool-broker-sandbox-and-recovery-slice
+  - root-project-intent-parser-hardening
 known_issues:
   - id: I-001
     title: Legacy duplicate projects in .rorven/state.json

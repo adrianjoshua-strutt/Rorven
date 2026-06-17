@@ -9,6 +9,7 @@ import {
   getSettings,
   listProjects,
   submitRun,
+  updateProjectDefaults,
 } from "../api";
 import {
   ActivityCard,
@@ -190,6 +191,29 @@ export function useConsoleController() {
     }
   }
 
+  async function handleSubmitRootMessage(event: FormEvent) {
+    await rootProject.handleSubmit(event);
+    try {
+      setProjects(await listProjects());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to refresh projects");
+    }
+  }
+
+  async function handleUpdateWorkspaceBaseRoot(workspaceBaseRoot: string) {
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      setSettingsSnapshot(
+        await updateProjectDefaults({ workspace_base_root: workspaceBaseRoot }),
+      );
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update project defaults");
+      setSettingsLoadState("error");
+    }
+  }
+
   function selectRoot() {
     projectLoadSequence.current += 1;
     setSelectedScope("root");
@@ -258,7 +282,8 @@ export function useConsoleController() {
     finishedSubagents,
     handleCreateProject,
     handleSubmitMessage,
-    handleSubmitRootMessage: rootProject.handleSubmit,
+    handleSubmitRootMessage,
+    handleUpdateWorkspaceBaseRoot,
     rootIsPending: rootProject.isPending,
     inspectActivity,
     inspectedProjectAgent,

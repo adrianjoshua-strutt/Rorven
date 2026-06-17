@@ -53,6 +53,7 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
         },
         "project_defaults": {
             "workspace_root_source": "user-selected",
+            "workspace_base_root": _read_workspace_base_root(data_dir),
             "memory_backend": "deferred",
             "sandbox": "deferred",
         },
@@ -60,15 +61,8 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
 
 
 def _read_persisted_model_profile_ids(data_dir: Path) -> dict[str, str]:
-    state_path = data_dir / "state.json"
-    if not state_path.exists():
-        return {}
-
-    try:
-        import json
-
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except Exception:
+    state = _read_state(data_dir)
+    if state is None:
         return {}
 
     settings = state.get("settings")
@@ -84,3 +78,32 @@ def _read_persisted_model_profile_ids(data_dir: Path) -> dict[str, str]:
         if isinstance(value, str) and value.strip() and value.strip() != "replace-me":
             result[name] = value.strip()
     return result
+
+
+def _read_workspace_base_root(data_dir: Path) -> str:
+    state = _read_state(data_dir)
+    if state is None:
+        return str(Path.cwd().resolve())
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return str(Path.cwd().resolve())
+    project_defaults = settings.get("project_defaults")
+    if not isinstance(project_defaults, dict):
+        return str(Path.cwd().resolve())
+    value = project_defaults.get("workspace_base_root")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return str(Path.cwd().resolve())
+
+
+def _read_state(data_dir: Path) -> dict[str, Any] | None:
+    state_path = data_dir / "state.json"
+    if not state_path.exists():
+        return None
+
+    try:
+        import json
+
+        return json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None

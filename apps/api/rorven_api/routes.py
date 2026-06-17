@@ -8,6 +8,7 @@ from rorven.composition import LocalServices
 from rorven_api.schemas import (
     CreateProjectRequest,
     ModelProfileSettingsRequest,
+    ProjectDefaultsSettingsRequest,
     RootMessageRequest,
     SubmitRunRequest,
     WorkOnceRequest,
@@ -52,6 +53,14 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
             if value is not None
         }
         services.store.set_model_profile_ids(normalized)
+        return {"settings": read_settings(services.data_dir)}
+
+    @app.post("/settings/project-defaults")
+    def update_project_defaults(request: ProjectDefaultsSettingsRequest) -> dict[str, Any]:
+        try:
+            services.store.set_workspace_base_root(request.workspace_base_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"settings": read_settings(services.data_dir)}
 
     @app.get("/root")

@@ -27,3 +27,7 @@ class ModelProfileSettingsRequest(BaseModel):
     balanced: str | None = None
     reasoning: str | None = None
     frontier: str | None = None
+
+
+class ProjectDefaultsSettingsRequest(BaseModel):
+    workspace_base_root: str = Field(min_length=1)
