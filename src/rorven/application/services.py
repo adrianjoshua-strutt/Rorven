@@ -13,6 +13,7 @@ from rorven.application.ports import (
     AgentRuntime,
     ApprovalRepository,
     ArtifactStore,
+    ConversationRepository,
     EventRepository,
     ProjectDefaultsRepository,
     RunRepository,
@@ -29,6 +30,8 @@ from rorven.domain import (
     Approval,
     ApprovalStatus,
     ArtifactMetadata,
+    ConversationEntry,
+    ConversationRole,
     Event,
     EventType,
     Project,
@@ -44,6 +47,7 @@ from rorven.domain import (
 class ProjectState:
     project: Project
     runs: Sequence[Run]
+    conversation_entries: Sequence[ConversationEntry]
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +59,7 @@ class RunState:
     artifacts: Sequence[ArtifactMetadata]
     artifact_contents: dict[str, str]
     approvals: Sequence[Approval]
+    conversation_entries: Sequence[ConversationEntry]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +87,7 @@ class ProjectService:
         runtime: AgentRuntime,
         artifacts: ArtifactStore,
         approvals: ApprovalRepository,
+        conversations: ConversationRepository,
     ) -> None:
         self._runs = runs
         self._events = events
@@ -89,6 +95,7 @@ class ProjectService:
         self._runtime = runtime
         self._artifacts = artifacts
         self._approvals = approvals
+        self._conversations = conversations
 
     def list_projects(self) -> Sequence[Project]:
         return self._runs.list_projects()
@@ -112,6 +119,7 @@ class ProjectService:
         return ProjectState(
             project=self._runs.get_project(project_id),
             runs=self._runs.list_runs(project_id),
+            conversation_entries=self._conversations.list_conversation_for_project(project_id),
         )
 
     def submit_task(self, project_id: str, command: str) -> RunState:
@@ -130,6 +138,18 @@ class ProjectService:
                 )
             ],
         )
+        self._conversations.append_conversation_entries(
+            [
+                ConversationEntry.create(
+                    project_id=project.id,
+                    run_id=run.id,
+                    agent_run_id=parent.id,
+                    role=ConversationRole.USER,
+                    title="You",
+                    body=command,
+                )
+            ]
+        )
         return self.get_run_state(project_id, run.id)
 
     def get_run_state(self, project_id: str, run_id: str) -> RunState:
@@ -142,6 +162,7 @@ class ProjectService:
             artifacts=artifacts,
             artifact_contents={artifact.id: self._artifacts.get_text(artifact.id) for artifact in artifacts},
             approvals=self._approvals.list_approvals_for_run(run_id),
+            conversation_entries=self._conversations.list_conversation_for_run(run_id),
         )
 
     def _root_agent_run(self, project_id: str, run_id: str) -> AgentRun:
@@ -177,11 +198,13 @@ class ApprovalService:
         approvals: ApprovalRepository,
         artifacts: ArtifactStore,
         tool_broker: ToolBroker,
+        conversations: ConversationRepository,
     ) -> None:
         self._runs = runs
         self._approvals = approvals
         self._artifacts = artifacts
         self._tool_broker = tool_broker
+        self._conversations = conversations
 
     def list_for_run(self, project_id: str, run_id: str) -> Sequence[Approval]:
         self._runs.get_run(project_id, run_id)
@@ -218,6 +241,19 @@ class ApprovalService:
                     )
                 ],
             )
+            self._conversations.append_conversation_entries(
+                [
+                    ConversationEntry.create(
+                        project_id=approval.project_id,
+                        run_id=approval.run_id,
+                        agent_run_id=approval.agent_run_id,
+                        role=ConversationRole.EVENT,
+                        title="Approval applied",
+                        body=f"Approved {approval.action}.",
+                        artifact_id=result_artifact.id,
+                    )
+                ]
+            )
             return applied
         except Exception as exc:
             failed = approval.fail(str(exc))
@@ -251,6 +287,19 @@ class ApprovalService:
                     approval.run_id,
                 )
             ],
+        )
+        self._conversations.append_conversation_entries(
+            [
+                ConversationEntry.create(
+                    project_id=approval.project_id,
+                    run_id=approval.run_id,
+                    agent_run_id=approval.agent_run_id,
+                    role=ConversationRole.EVENT,
+                    title="Approval rejected",
+                    body=f"Rejected {approval.action}.",
+                    artifact_id=approval.artifact_id,
+                )
+            ]
         )
         return rejected
 

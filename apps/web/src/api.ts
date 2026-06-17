@@ -7,6 +7,7 @@ export type Project = {
   };
   created_at: string;
   runs?: RunSummary[];
+  conversation_entries?: ConversationEntry[];
 };
 
 export type RunSummary = {
@@ -62,11 +63,39 @@ export type ArtifactRecord = {
   created_at: string;
 };
 
+export type ApprovalRecord = {
+  id: string;
+  project_id: string;
+  run_id: string;
+  agent_run_id: string;
+  artifact_id: string;
+  action: string;
+  status: string;
+  created_at: string;
+  decided_at: string | null;
+  result_artifact_id: string | null;
+  failure_reason: string | null;
+};
+
+export type ConversationEntry = {
+  id: string;
+  project_id: string;
+  run_id: string;
+  agent_run_id: string | null;
+  role: "user" | "assistant" | "tool" | "event";
+  title: string;
+  body: string;
+  artifact_id: string | null;
+  created_at: string;
+};
+
 export type RunState = RunSummary & {
   agent_runs: AgentRun[];
   tasks: Task[];
   events: EventRecord[];
   artifacts: ArtifactRecord[];
+  approvals: ApprovalRecord[];
+  conversation_entries: ConversationEntry[];
 };
 
 export type SettingsSnapshot = {
@@ -230,4 +259,28 @@ export async function workOnce(): Promise<Task[]> {
     body: JSON.stringify({ worker_id: "web-console", limit: 2 }),
   });
   return payload.completed_tasks;
+}
+
+export async function approveApproval(
+  projectId: string,
+  runId: string,
+  approvalId: string,
+): Promise<ApprovalRecord> {
+  const payload = await request<{ approval: ApprovalRecord }>(
+    `/projects/${projectId}/runs/${runId}/approvals/${approvalId}/approve`,
+    { method: "POST" },
+  );
+  return payload.approval;
+}
+
+export async function rejectApproval(
+  projectId: string,
+  runId: string,
+  approvalId: string,
+): Promise<ApprovalRecord> {
+  const payload = await request<{ approval: ApprovalRecord }>(
+    `/projects/${projectId}/runs/${runId}/approvals/${approvalId}/reject`,
+    { method: "POST" },
+  );
+  return payload.approval;
 }

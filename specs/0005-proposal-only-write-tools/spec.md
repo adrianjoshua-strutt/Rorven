@@ -23,7 +23,6 @@ approval/apply flows.
 ## Non-Goals
 
 - Applying changes.
-- Human approval UI.
 - Shell, git, browser, network, or external service tools.
 - Sandbox isolation.
 - Multi-file patch application.
@@ -35,4 +34,8 @@ approval/apply flows.
 - Worker tests prove successful proposals create pending approvals.
 - API tests prove approved proposal application mutates the target file only
   after approval.
-- Frontend build succeeds against the unchanged API contract.
+- The web console displays pending proposal approvals in the producing subagent
+  work view and can approve or reject them through the API.
+- Project and subagent conversations are rendered from durable transcript
+  entries rather than reconstructed from only the selected run.
+- Frontend build succeeds against the API contract.

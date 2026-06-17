@@ -1,13 +1,16 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ApprovalRecord,
   Project,
   RunState,
   SettingsSnapshot,
+  approveApproval,
   createProject,
   getProject,
   getRun,
   getSettings,
   listProjects,
+  rejectApproval,
   submitRun,
   updateProjectDefaults,
 } from "../api";
@@ -132,10 +135,13 @@ export function useConsoleController() {
     if (loadToken !== projectLoadSequence.current) {
       return;
     }
+    const sortedRuns = [...(project.runs ?? [])].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
     const runId =
       preferredRunId && project.runs?.some((run) => run.id === preferredRunId)
         ? preferredRunId
-        : project.runs?.[0]?.id;
+        : sortedRuns[0]?.id;
     if (runId) {
       const run = await getRun(project.id, runId);
       setSelectedRun(run);
@@ -214,6 +220,22 @@ export function useConsoleController() {
     }
   }
 
+  async function handleApprovalDecision(approval: ApprovalRecord, decision: "approve" | "reject") {
+    setError(null);
+    try {
+      if (decision === "approve") {
+        await approveApproval(approval.project_id, approval.run_id, approval.id);
+      } else {
+        await rejectApproval(approval.project_id, approval.run_id, approval.id);
+      }
+      if (selectedProjectId) {
+        await loadProject(selectedProjectId, approval.run_id);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : `Unable to ${decision} approval`);
+    }
+  }
+
   function selectRoot() {
     projectLoadSequence.current += 1;
     setSelectedScope("root");
@@ -284,6 +306,7 @@ export function useConsoleController() {
     handleSubmitMessage,
     handleSubmitRootMessage,
     handleUpdateWorkspaceBaseRoot,
+    handleApprovalDecision,
     rootIsPending: rootProject.isPending,
     inspectActivity,
     inspectedProjectAgent,

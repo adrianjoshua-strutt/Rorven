@@ -49,6 +49,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
         runtime=runtime,
         artifacts=store,
         approvals=store,
+        conversations=store,
     )
     return LocalServices(
         data_dir=root,
@@ -59,6 +60,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             approvals=store,
             artifacts=store,
             tool_broker=tool_broker,
+            conversations=store,
         ),
         root=RootService(
             runs=store,
@@ -75,6 +77,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             events=store,
             model_gateway=model_gateway,
             approvals=store,
+            conversations=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=tool_broker,
         ),

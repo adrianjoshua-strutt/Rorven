@@ -4,12 +4,15 @@ from datetime import datetime
 from typing import Any
 
 from rorven.application.services import ProjectState, RootActivity, RootDashboardState, RunState
-from rorven.domain import AgentRun, Approval, ArtifactMetadata, Event, Project, Run, Task
+from rorven.domain import AgentRun, Approval, ArtifactMetadata, ConversationEntry, Event, Project, Run, Task
 
 
 def project_state_to_api(state: ProjectState) -> dict[str, Any]:
     data = project_to_api(state.project)
     data["runs"] = [run_to_api(run) for run in state.runs]
+    data["conversation_entries"] = [
+        conversation_entry_to_api(entry) for entry in state.conversation_entries
+    ]
     return data
 
 
@@ -24,6 +27,9 @@ def run_state_to_api(state: RunState) -> dict[str, Any]:
             for artifact in state.artifacts
         ],
         "approvals": [approval_to_api(approval) for approval in state.approvals],
+        "conversation_entries": [
+            conversation_entry_to_api(entry) for entry in state.conversation_entries
+        ],
     }
 
 
@@ -115,6 +121,20 @@ def approval_to_api(approval: Approval) -> dict[str, Any]:
         "decided_at": _dt(approval.decided_at) if approval.decided_at else None,
         "result_artifact_id": approval.result_artifact_id,
         "failure_reason": approval.failure_reason,
+    }
+
+
+def conversation_entry_to_api(entry: ConversationEntry) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "project_id": entry.project_id,
+        "run_id": entry.run_id,
+        "agent_run_id": entry.agent_run_id,
+        "role": entry.role.value,
+        "title": entry.title,
+        "body": entry.body,
+        "artifact_id": entry.artifact_id,
+        "created_at": _dt(entry.created_at),
     }
 
 

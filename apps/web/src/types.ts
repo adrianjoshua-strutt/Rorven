@@ -40,9 +40,10 @@ export type NewProjectDraft = {
 };
 
 export type AgentWorkEntry = {
-  side: "system" | "agent";
+  side: "system" | "agent" | "tool" | "event";
   title: string;
   body: string;
+  created_at?: string;
 };
 
 export type ProjectAgentRun = AgentRun;

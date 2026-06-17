@@ -46,6 +46,11 @@ test.describe("Rorven console", () => {
     await expect(page.getByText("Create a durable test run")).toBeVisible();
     await expect(page.getByText(/Working|Queued|Done/)).toBeVisible();
 
+    await page.getByPlaceholder("Message the project orchestrator").fill("Add a second durable request");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText("Create a durable test run")).toBeVisible();
+    await expect(page.getByText("Add a second durable request")).toBeVisible();
+
     expect(consoleErrors).toEqual([]);
   });
 });

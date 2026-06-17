@@ -20,6 +20,7 @@ from rorven.application.modeling import ModelMessage, ModelRequest, ModelRespons
 from rorven.application.ports import (
     ApprovalRepository,
     ArtifactStore,
+    ConversationRepository,
     EventRepository,
     ModelGateway,
     RunRepository,
@@ -36,7 +37,18 @@ from rorven.application.tools import (
     tool_request_to_json,
     tool_results_prompt,
 )
-from rorven.domain import Approval, AgentRun, ArtifactMetadata, Event, EventType, ModelProfile, RunStatus, Task
+from rorven.domain import (
+    Approval,
+    AgentRun,
+    ArtifactMetadata,
+    ConversationEntry,
+    ConversationRole,
+    Event,
+    EventType,
+    ModelProfile,
+    RunStatus,
+    Task,
+)
 
 
 class WorkerService:
@@ -48,6 +60,7 @@ class WorkerService:
         events: EventRepository,
         model_gateway: ModelGateway,
         approvals: ApprovalRepository,
+        conversations: ConversationRepository,
         tool_policy: ToolPolicy | None = None,
         tool_broker: ToolBroker | None = None,
     ) -> None:
@@ -57,6 +70,7 @@ class WorkerService:
         self._events = events
         self._model_gateway = model_gateway
         self._approvals = approvals
+        self._conversations = conversations
         self._tool_policy = tool_policy or DenyAllToolPolicy()
         self._tool_broker = tool_broker
 
@@ -121,7 +135,14 @@ class WorkerService:
         response = self._model_gateway.complete(request)
         instruction = parse_agent_tool_instruction(response.content)
         if not instruction.requests_tools:
-            return _format_model_response(response, instruction.final_content or response.content)
+            content = _format_model_response(response, instruction.final_content or response.content)
+            self._append_conversation(
+                agent_run,
+                ConversationRole.ASSISTANT,
+                agent_run.definition.name,
+                content,
+            )
+            return content
 
         tool_results = self._execute_tool_calls(agent_run, instruction.tool_requests)
         final_response = self._model_gateway.complete(
@@ -139,7 +160,14 @@ class WorkerService:
         final_instruction = parse_agent_tool_instruction(final_response.content)
         if final_instruction.requests_tools:
             raise ValueError("agent requested more than one round of tools")
-        return _format_model_response(final_response, final_instruction.final_content or final_response.content)
+        content = _format_model_response(final_response, final_instruction.final_content or final_response.content)
+        self._append_conversation(
+            agent_run,
+            ConversationRole.ASSISTANT,
+            agent_run.definition.name,
+            content,
+        )
+        return content
 
     def _execute_tool_calls(
         self,
@@ -178,6 +206,13 @@ class WorkerService:
                         "artifact_id": artifact.id,
                     }
                 )
+                self._append_conversation(
+                    agent_run,
+                    ConversationRole.TOOL,
+                    f"{request.name} denied",
+                    decision.reason,
+                    artifact.id,
+                )
                 continue
             try:
                 result = self._tool_broker.execute(project, agent_run, request)
@@ -202,6 +237,13 @@ class WorkerService:
                         "artifact_id": artifact.id,
                     }
                 )
+                self._append_conversation(
+                    agent_run,
+                    ConversationRole.TOOL,
+                    f"{request.name} failed",
+                    str(exc),
+                    artifact.id,
+                )
                 continue
             artifact = self._put_tool_artifact(
                 agent_run,
@@ -225,6 +267,16 @@ class WorkerService:
                     "metadata": result.metadata,
                     "content": result.content,
                 }
+            )
+            title = f"{request.name} completed"
+            if approval:
+                title = f"{request.name} awaiting approval"
+            self._append_conversation(
+                agent_run,
+                ConversationRole.TOOL,
+                title,
+                result.content,
+                artifact.id,
             )
         return results
 
@@ -299,6 +351,7 @@ class WorkerService:
 
         content = _format_model_response(response, decision.answer or "")
         artifact = self._put_agent_result(root, content)
+        self._append_conversation(root, ConversationRole.ASSISTANT, "Project orchestrator", content, artifact.id)
         answered_root = root.transition(RunStatus.COMPLETED, artifact.id)
         self._runs.update_agent_run(
             answered_root,
@@ -365,6 +418,13 @@ class WorkerService:
             name=f"dispatch-{root.id}.json",
             content=_format_model_response(response, decision.raw_content),
         )
+        self._append_conversation(
+            root,
+            ConversationRole.ASSISTANT,
+            "Project orchestrator",
+            _dispatch_summary(decision),
+            decision_artifact.id,
+        )
         children: list[AgentRun] = []
         child_tasks: list[Task] = []
         events: list[Event] = [
@@ -399,6 +459,13 @@ class WorkerService:
             child_task = Task.create(child.id)
             children.append(child)
             child_tasks.append(child_task)
+            self._append_conversation(
+                child,
+                ConversationRole.USER,
+                "Assignment",
+                dispatch.task,
+                assignment.id,
+            )
             events.append(
                 Event.create(
                     root.project_id,
@@ -449,6 +516,13 @@ class WorkerService:
             kind="text.error",
             name=f"{agent_run.definition.name}-{agent_run.id}-error.txt",
             content=f"Model-backed worker failed: {exc}",
+        )
+        self._append_conversation(
+            agent_run,
+            ConversationRole.EVENT,
+            "Worker failed",
+            f"Model-backed worker failed: {exc}",
+            artifact.id,
         )
         failed_agent = agent_run.transition(RunStatus.FAILED, artifact.id)
         self._runs.update_agent_run(
@@ -555,6 +629,13 @@ class WorkerService:
             name=f"run-{run_id}-final.txt",
             content=final_content,
         )
+        self._append_conversation(
+            roots[0],
+            ConversationRole.ASSISTANT,
+            "Project orchestrator",
+            final_content,
+            artifact.id,
+        )
         parent = roots[0].transition(RunStatus.COMPLETED, artifact.id)
         self._runs.update_agent_run(
             parent,
@@ -601,6 +682,28 @@ class WorkerService:
         response = self._model_gateway.complete(request)
         return _format_model_response(response, response.content)
 
+    def _append_conversation(
+        self,
+        agent_run: AgentRun,
+        role: ConversationRole,
+        title: str,
+        body: str,
+        artifact_id: str | None = None,
+    ) -> None:
+        self._conversations.append_conversation_entries(
+            [
+                ConversationEntry.create(
+                    project_id=agent_run.project_id,
+                    run_id=agent_run.run_id,
+                    agent_run_id=agent_run.id,
+                    role=role,
+                    title=title,
+                    body=body,
+                    artifact_id=artifact_id,
+                )
+            ]
+        )
+
 def _format_usage(usage: dict[str, object]) -> str:
     total = usage.get("total_tokens")
     if isinstance(total, int):
@@ -626,3 +729,11 @@ def _safe_tool_input(request: ToolRequest) -> dict[str, object]:
             continue
         result[key] = value
     return result
+
+
+def _dispatch_summary(decision: OrchestratorDecision) -> str:
+    names = ", ".join(dispatch.definition.name for dispatch in decision.child_agents)
+    count = len(decision.child_agents)
+    if count == 1:
+        return f"I spawned 1 subagent: {names}."
+    return f"I spawned {count} subagents: {names}."

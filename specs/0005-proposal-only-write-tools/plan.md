@@ -8,10 +8,13 @@
 4. Add adapter and worker tests proving no mutation occurs.
 5. Add durable approval records for proposed text-file writes.
 6. Add approved API application through the workspace broker.
+7. Add durable agent transcript entries for user messages, assignments, tool
+   results, approvals, and final answers.
+8. Add console approval ingestion and approve/reject controls in the subagent
+   work view.
 
 ## Next Slices
 
-1. Add UI for reviewing, approving, and rejecting proposal approvals.
-2. Add idempotency keys and recovery tests for interrupted apply operations.
-3. Add sandbox isolation around apply.
-4. Add multi-file patch proposals only after approval and recovery semantics are proven.
+1. Add idempotency keys and recovery tests for interrupted apply operations.
+2. Add sandbox isolation around apply.
+3. Add multi-file patch proposals only after approval and recovery semantics are proven.

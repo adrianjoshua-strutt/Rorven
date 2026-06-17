@@ -5,7 +5,7 @@
 PostgreSQL is the system of record for:
 
 - projects and workspace bindings
-- conversations and user messages
+- conversations, user messages, and inspectable agent transcript entries
 - runs and agent runs
 - durable task queue and leases
 - events
@@ -29,6 +29,9 @@ LangGraph checkpoint tables may exist in the same database but remain adapter-ow
 - Mutable workspace proposals produce durable approval records before application.
 - Approval decisions and their lifecycle events are committed with the approval
   state transition.
+- Agent transcript entries record inspectable prompts, model-visible decisions,
+  tool requests/results, approvals, errors, and final answers. Private
+  chain-of-thought is not persisted.
 
 ## Data ownership
 

@@ -18,6 +18,7 @@ from rorven.adapters.model import DEFAULT_MODEL_IDS
 from rorven.application.ports import (
     ApprovalRepository,
     ArtifactStore,
+    ConversationRepository,
     EventRepository,
     ProjectDefaultsRepository,
     RunRepository,
@@ -29,6 +30,8 @@ from rorven.domain import (
     Approval,
     ApprovalStatus,
     ArtifactMetadata,
+    ConversationEntry,
+    ConversationRole,
     Event,
     EventType,
     ModelProfile,
@@ -52,6 +55,7 @@ class LocalFilePlatformStore(
     TaskQueue,
     ArtifactStore,
     ApprovalRepository,
+    ConversationRepository,
     ProjectDefaultsRepository,
 ):
     def __init__(self, root: Path, default_workspace_base_root: str | None = None) -> None:
@@ -333,6 +337,35 @@ class LocalFilePlatformStore(
             state["root_messages"].append(message)
             self._write_state(state)
 
+    def append_conversation_entries(self, entries: Sequence[ConversationEntry]) -> None:
+        if not entries:
+            return
+        with self._lock:
+            state = self._read_state()
+            for entry in entries:
+                state["conversation_entries"][entry.id] = self._conversation_entry_to_json(entry)
+            self._write_state(state)
+
+    def list_conversation_for_run(self, run_id: str) -> Sequence[ConversationEntry]:
+        with self._lock:
+            state = self._read_state()
+            entries = [
+                self._conversation_entry_from_json(item)
+                for item in state["conversation_entries"].values()
+                if item["run_id"] == run_id
+            ]
+            return sorted(entries, key=lambda item: item.created_at)
+
+    def list_conversation_for_project(self, project_id: str) -> Sequence[ConversationEntry]:
+        with self._lock:
+            state = self._read_state()
+            entries = [
+                self._conversation_entry_from_json(item)
+                for item in state["conversation_entries"].values()
+                if item["project_id"] == project_id
+            ]
+            return sorted(entries, key=lambda item: item.created_at)
+
     def get_model_profile_ids(self) -> dict[str, str]:
         with self._lock:
             state = self._read_state()
@@ -454,6 +487,7 @@ class LocalFilePlatformStore(
             "events": {},
             "artifacts": {},
             "approvals": {},
+            "conversation_entries": {},
             "root_messages": [],
             "settings": {
                 "model_profiles": {},
@@ -641,4 +675,23 @@ class LocalFilePlatformStore(
             else None,
             result_artifact_id=data.get("result_artifact_id"),
             failure_reason=data.get("failure_reason"),
+        )
+
+    def _conversation_entry_to_json(self, entry: ConversationEntry) -> dict[str, Any]:
+        data = asdict(entry)
+        data["role"] = entry.role.value
+        data["created_at"] = entry.created_at.isoformat()
+        return data
+
+    def _conversation_entry_from_json(self, data: dict[str, Any]) -> ConversationEntry:
+        return ConversationEntry(
+            id=data["id"],
+            project_id=data["project_id"],
+            run_id=data["run_id"],
+            agent_run_id=data.get("agent_run_id"),
+            role=ConversationRole(data["role"]),
+            title=data["title"],
+            body=data.get("body", ""),
+            artifact_id=data.get("artifact_id"),
+            created_at=datetime.fromisoformat(data["created_at"]),
         )

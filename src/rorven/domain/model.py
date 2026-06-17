@@ -57,6 +57,13 @@ class ApprovalStatus(StrEnum):
     FAILED = "failed"
 
 
+class ConversationRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+    EVENT = "event"
+
+
 class EventType(StrEnum):
     PROJECT_CREATED = "project.created"
     RUN_CREATED = "run.created"
@@ -211,6 +218,50 @@ class AgentRun:
             input_artifact_id=self.input_artifact_id,
             result_artifact_id=result_artifact_id or self.result_artifact_id,
             created_at=self.created_at,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationEntry:
+    id: str
+    project_id: str
+    run_id: str
+    agent_run_id: str | None
+    role: ConversationRole
+    title: str
+    body: str
+    artifact_id: str | None = None
+    created_at: datetime = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        require_uuid(self.id, "conversation entry id")
+        require_uuid(self.project_id, "project id")
+        require_uuid(self.run_id, "run id")
+        if self.agent_run_id is not None:
+            require_uuid(self.agent_run_id, "agent run id")
+        if not self.title.strip():
+            raise ValueError("conversation entry title is required")
+
+    @classmethod
+    def create(
+        cls,
+        project_id: str,
+        run_id: str,
+        role: ConversationRole,
+        title: str,
+        body: str,
+        agent_run_id: str | None = None,
+        artifact_id: str | None = None,
+    ) -> ConversationEntry:
+        return cls(
+            id=new_id(),
+            project_id=project_id,
+            run_id=run_id,
+            agent_run_id=agent_run_id,
+            role=role,
+            title=title,
+            body=body,
+            artifact_id=artifact_id,
         )
 
 

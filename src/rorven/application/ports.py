@@ -7,7 +7,7 @@ from typing import Protocol, Sequence
 
 from rorven.application.modeling import ModelRequest, ModelResponse
 from rorven.application.tools import ToolExecutionResult, ToolPolicyDecision, ToolRequest
-from rorven.domain import AgentRun, Approval, ArtifactMetadata, Event, Project, Run, Task
+from rorven.domain import AgentRun, Approval, ArtifactMetadata, ConversationEntry, Event, Project, Run, Task
 
 
 class Clock(Protocol):
@@ -95,6 +95,17 @@ class ArtifactStore(Protocol):
 
     def get_text(self, artifact_id: str) -> str:
         """Return artifact text content by ID."""
+
+
+class ConversationRepository(Protocol):
+    def append_conversation_entries(self, entries: Sequence[ConversationEntry]) -> None:
+        """Persist inspectable conversation and work-log entries."""
+
+    def list_conversation_for_run(self, run_id: str) -> Sequence[ConversationEntry]:
+        """Return conversation entries for one run in chronological order."""
+
+    def list_conversation_for_project(self, project_id: str) -> Sequence[ConversationEntry]:
+        """Return conversation entries for one project in chronological order."""
 
 
 class WorkspaceProvisioner(Protocol):

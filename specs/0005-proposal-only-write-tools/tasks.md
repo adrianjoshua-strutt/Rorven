@@ -9,5 +9,7 @@
 - [x] Persist proposal artifacts through worker execution.
 - [x] Add approval records for mutable actions.
 - [x] Add approved apply tool.
+- [x] Add durable agent transcript entries.
+- [x] Add approval UI ingestion and approve/reject controls.
 - [ ] Add sandbox isolation for apply.
 - [ ] Add recovery tests for interrupted apply.

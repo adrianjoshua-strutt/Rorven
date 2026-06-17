@@ -55,6 +55,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
         worker = WorkerService(
             runs=store,
@@ -63,6 +64,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             model_gateway=TestModelGateway(),
             approvals=store,
+            conversations=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -77,6 +79,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
             approvals=reopened,
+            conversations=reopened,
         )
         reopened_state = reopened_projects.get_run_state(project.id, run_state.run.id)
 
@@ -84,6 +87,10 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual(1, len(reopened_state.agent_runs))
         self.assertEqual({"completed"}, {item.status.value for item in reopened_state.tasks})
         self.assertEqual(1, len(reopened_state.artifacts))
+        self.assertEqual(
+            ["You", "Project orchestrator"],
+            [entry.title for entry in reopened_state.conversation_entries],
+        )
         self.assertTrue((root / "state.json").exists())
 
     def test_worker_dispatches_child_agents_and_joins_results(self) -> None:
@@ -97,6 +104,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -118,6 +126,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             model_gateway=gateway,
             approvals=store,
+            conversations=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -143,6 +152,11 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertIn("reviewer result", artifact_text)
         self.assertIn("implementer result", artifact_text)
         self.assertIn("summary result", artifact_text)
+        transcript = "\n".join(entry.body for entry in finished_state.conversation_entries)
+        self.assertIn("Build backend and frontend", transcript)
+        self.assertIn("Review the request for risks.", transcript)
+        self.assertIn("reviewer result", transcript)
+        self.assertIn("implementer result", transcript)
 
     def test_malformed_orchestrator_dispatch_fails_run(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-dispatch-fail-{uuid4()}"
@@ -155,6 +169,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
         worker = WorkerService(
             runs=store,
@@ -163,6 +178,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             model_gateway=ScriptedModelGateway(["not-json"]),
             approvals=store,
+            conversations=store,
         )
 
         project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
@@ -189,6 +205,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -209,6 +226,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             model_gateway=gateway,
             approvals=store,
+            conversations=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=LocalWorkspaceToolBroker(),
         )
@@ -242,6 +260,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
         gateway = ScriptedModelGateway(
             [
@@ -263,6 +282,7 @@ class LocalFileStoreTests(unittest.TestCase):
             events=store,
             model_gateway=gateway,
             approvals=store,
+            conversations=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=LocalWorkspaceToolBroker(),
         )
@@ -289,6 +309,7 @@ class LocalFileStoreTests(unittest.TestCase):
             approvals=store,
             artifacts=store,
             tool_broker=LocalWorkspaceToolBroker(),
+            conversations=store,
         )
         applied = approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
         after_approval_state = projects.get_run_state(project.id, run_state.run.id)
@@ -296,6 +317,10 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual("applied", applied.status.value)
         self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
         self.assertEqual("applied", after_approval_state.approvals[0].status.value)
+        self.assertIn(
+            "Approval applied",
+            [entry.title for entry in after_approval_state.conversation_entries],
+        )
         self.assertIn(
             "approval.created",
             [event.type.value for event in after_approval_state.events],
@@ -316,6 +341,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
 
         first = projects.create_project("First", "D:/workspaces", "D:/workspaces/first")
@@ -329,6 +355,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(reopened),
             artifacts=reopened,
             approvals=reopened,
+            conversations=reopened,
         )
 
         self.assertEqual(
@@ -347,6 +374,7 @@ class LocalFileStoreTests(unittest.TestCase):
             runtime=LangGraphAgentRuntime(store),
             artifacts=store,
             approvals=store,
+            conversations=store,
         )
 
         projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")

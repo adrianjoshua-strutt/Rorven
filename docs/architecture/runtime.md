@@ -10,7 +10,7 @@ The current runtime adapter uses LangGraph behind `AgentRuntime`. There is no pr
 
 Each project message creates a durable run and one root orchestrator `agent_run` before execution begins. A task is queued for that root agent. A worker leases the task and asks the orchestrator for a structured dispatch decision through the model gateway.
 
-The orchestrator may answer directly or dispatch approved child subagents. Dispatch is represented as provider-neutral JSON parsed in the application layer. The platform persists child assignments as artifacts, creates child `agent_run` records and tasks, marks the parent run waiting, then lets workers execute the child tasks. When all child runs complete, the root orchestrator summarizes their artifacts and completes the run.
+The orchestrator may answer directly or dispatch approved child subagents. Dispatch is represented as provider-neutral JSON parsed in the application layer. The platform persists child assignments as artifacts and transcript entries, creates child `agent_run` records and tasks, marks the parent run waiting, then lets workers execute the child tasks. When all child runs complete, the root orchestrator summarizes their artifacts and completes the run.
 
 The platform only creates child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
 
@@ -27,6 +27,7 @@ An agent run contains:
 - status
 - heartbeat and lease metadata
 - input and result artifact references
+- inspectable transcript entries
 - usage and cost
 
 ## Parallel work

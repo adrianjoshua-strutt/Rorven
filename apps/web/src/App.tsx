@@ -32,6 +32,8 @@ export function App() {
             agent={consoleState.inspectedProjectAgent}
             run={consoleState.selectedRun}
             onBack={() => consoleState.setInspectedAgent(null)}
+            onApprove={(approval) => void consoleState.handleApprovalDecision(approval, "approve")}
+            onReject={(approval) => void consoleState.handleApprovalDecision(approval, "reject")}
           />
         ) : consoleState.inspectedRootAgent ? (
           <RootAgentWorkView
