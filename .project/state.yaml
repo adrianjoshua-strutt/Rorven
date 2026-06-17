@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0005-proposal-only-write-tools
-last_verified_commit: 94e5094
+last_verified_commit: c99a9cb
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -92,4 +92,4 @@ known_issues:
       tools, or retrieve secrets.
     remediation: Add approval UI, idempotency keys, recovery tests, and sandboxed
       apply before expanding mutable tools.
-last_updated: '2026-06-16'
+last_updated: '2026-06-17'
