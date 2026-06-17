@@ -83,7 +83,9 @@ The first implemented tool slice is local read-only workspace inspection:
 
 ## Root project provisioning
 
-The root project may create and register local projects through the
+The root project may create and register local projects through a provider-neutral
+`project.create` root tool request. The model can request the action, but the
+application layer validates the payload and executes it through the
 `WorkspaceProvisioner` port. The local adapter can create directories only under
 the configured workspace base root stored in project defaults. Changing that base
 is an operator settings action; root chat rejects project paths outside the

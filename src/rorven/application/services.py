@@ -339,18 +339,6 @@ class RootService:
             "time": _current_iso(),
         }
         self._root_messages.append_root_message(user_message)
-        local_response = self._try_create_project_from_root_message(message)
-        if local_response is not None:
-            assistant_message = {
-                "id": f"root-orchestrator-{len(self._root_messages.list_root_messages()) + 1}",
-                "side": "orchestrator",
-                "title": "Root orchestrator",
-                "body": local_response,
-                "time": _current_iso(),
-                "status": "local",
-            }
-            self._root_messages.append_root_message(assistant_message)
-            return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
 
         projects = self._project_stats()
         response = self._model_gateway.complete(
@@ -367,28 +355,36 @@ class RootService:
                 max_output_tokens=240,
             )
         )
+        instruction = _parse_root_instruction(response.content)
+        body = self._execute_root_instruction(instruction)
         assistant_message = {
             "id": f"root-orchestrator-{len(self._root_messages.list_root_messages()) + 1}",
             "side": "orchestrator",
             "title": "Root orchestrator",
-            "body": _normalize_root_response(response.content),
+            "body": body,
             "time": _current_iso(),
             "status": response.provider,
         }
         self._root_messages.append_root_message(assistant_message)
         return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
 
-    def _try_create_project_from_root_message(self, message: str) -> str | None:
-        if not _looks_like_project_creation(message):
-            return None
+    def _execute_root_instruction(self, instruction: "_RootInstruction") -> str:
+        if instruction.action in {"answer", "ask"}:
+            return _normalize_root_response(instruction.content or "")
+        if instruction.action != "tool_call" or instruction.tool_name != "project.create":
+            return "I cannot perform that root project action yet."
         base_root = Path(self._project_defaults.get_workspace_base_root()).resolve()
-        request = _parse_project_creation_request(message, base_root)
-        if request.name is None:
-            return (
-                "I can create that project. What should it be called? "
-                f"I will place it under {base_root} unless you change the workspace base in Settings."
-            )
-        workspace_root = (request.workspace_root or (base_root / _project_folder_name(request.name))).resolve()
+        name = instruction.tool_input.get("name")
+        if not isinstance(name, str) or not name.strip():
+            return f"What should the project be called? I will place it under {base_root}."
+        requested_root = instruction.tool_input.get("workspace_root")
+        if isinstance(requested_root, str) and requested_root.strip():
+            workspace_root = Path(requested_root.strip())
+            if not workspace_root.is_absolute():
+                workspace_root = base_root / workspace_root
+            workspace_root = workspace_root.resolve()
+        else:
+            workspace_root = (base_root / _project_folder_name(name)).resolve()
         if not _is_inside(base_root, workspace_root):
             return (
                 f"That folder is outside the configured workspace base: {base_root}. "
@@ -396,7 +392,7 @@ class RootService:
             )
         try:
             self._workspace_provisioner.ensure_directory(str(workspace_root))
-            project = self._projects.create_project(request.name, str(base_root), str(workspace_root))
+            project = self._projects.create_project(name.strip(), str(base_root), str(workspace_root))
         except ValueError as exc:
             return str(exc)
         return f"Created project {project.name} at {project.workspace.workspace_root}."
@@ -434,10 +430,14 @@ def _root_system_prompt() -> str:
         [
             "You are the root project orchestrator for Rorven.",
             "The root project helps the operator find, register, and inspect projects.",
-            "Root-local actions create or register projects before model responses are requested.",
-            "Write for an application chat bubble, not a document.",
-            "Use plain text only: no Markdown, no bold markers, no headings, no bullet lists, no code fences.",
-            "Answer in one to three short sentences.",
+            "Return exactly one JSON object and no prose outside it.",
+            'To answer normally: {"action":"answer","content":"plain chat text"}',
+            'To ask for missing information: {"action":"ask","content":"plain question"}',
+            'To create a project: {"action":"tool_call","tool":{"name":"project.create","input":{"name":"Project name","workspace_root":"optional relative or absolute path"}}}',
+            "Use project.create only when the user clearly asks to create, add, register, or make a project.",
+            "If the user asks to create a project without a name, ask for the name.",
+            "If workspace_root is omitted, Rorven will place the project under the configured workspace base.",
+            "Plain chat text must not use Markdown, headings, bullets, or code fences.",
         ]
     )
 
@@ -452,7 +452,7 @@ def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> s
             f"- {project['name']} at {project['workspace_root']}: {project['runs']} runs, {project['active_runs']} active, {project['completed_runs']} completed"
         )
     lines.append(
-        "Respond plainly as the root project orchestrator. Do not format with Markdown."
+        "Respond with the root action JSON contract from the system message."
     )
     return "\n".join(lines)
 
@@ -474,67 +474,58 @@ def _normalize_root_response(content: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class _ProjectCreationRequest:
-    name: str | None
-    workspace_root: Path | None
+class _RootInstruction:
+    action: str
+    content: str | None
+    tool_name: str | None
+    tool_input: dict[str, object]
 
 
-def _looks_like_project_creation(message: str) -> bool:
-    lowered = message.lower()
-    return "project" in lowered and any(
-        phrase in lowered for phrase in ("create", "new", "make", "register", "add")
+def _parse_root_instruction(content: str) -> _RootInstruction:
+    payload = _try_load_root_json(content)
+    if payload is None:
+        return _RootInstruction("answer", content, None, {})
+    action = payload.get("action")
+    if not isinstance(action, str):
+        return _RootInstruction("answer", content, None, {})
+    normalized_action = action.strip().lower()
+    if normalized_action in {"answer", "ask"}:
+        response_content = payload.get("content")
+        return _RootInstruction(
+            normalized_action,
+            response_content if isinstance(response_content, str) else "",
+            None,
+            {},
+        )
+    if normalized_action != "tool_call":
+        return _RootInstruction("answer", content, None, {})
+    tool = payload.get("tool")
+    if not isinstance(tool, dict):
+        return _RootInstruction("answer", content, None, {})
+    tool_name = tool.get("name")
+    tool_input = tool.get("input")
+    return _RootInstruction(
+        "tool_call",
+        None,
+        tool_name if isinstance(tool_name, str) else None,
+        dict(tool_input) if isinstance(tool_input, dict) else {},
     )
 
 
-def _parse_project_creation_request(message: str, base_root: Path) -> _ProjectCreationRequest:
-    path = _extract_workspace_path(message, base_root)
-    name = _extract_project_name(message)
-    if name is None and path is not None and path.name:
-        name = _humanize_project_name(path.name)
-    return _ProjectCreationRequest(name=name, workspace_root=path)
-
-
-def _extract_project_name(message: str) -> str | None:
-    quoted = re.search(r'["“](.+?)["”]', message)
-    if quoted:
-        return quoted.group(1).strip()
-    named = re.search(r"\b(?:called|named)\s+([A-Za-z0-9][\w .-]{1,80})", message, re.IGNORECASE)
-    if named:
-        return _trim_name_stop_words(named.group(1))
-    project = re.search(r"\bproject\s+([A-Za-z0-9][\w .-]{1,80})", message, re.IGNORECASE)
-    if project:
-        candidate = _trim_name_stop_words(project.group(1))
-        if candidate and candidate.lower() not in {"for me", "on my desktop", "on desktop"}:
-            return candidate
-    return None
-
-
-def _trim_name_stop_words(value: str) -> str | None:
-    cleaned = re.split(r"\b(?:at|in|under|inside|on|for)\b", value, maxsplit=1, flags=re.IGNORECASE)[0]
-    cleaned = cleaned.strip(" .")
-    return cleaned or None
-
-
-def _extract_workspace_path(message: str, base_root: Path) -> Path | None:
-    windows_path = re.search(r"([A-Za-z]:[\\/][^\n\r\"']+)", message)
-    if windows_path:
-        return Path(windows_path.group(1).strip().rstrip(" ."))
-    path_after_keyword = re.search(
-        r"\b(?:at|in|under|inside)\s+([~./\\A-Za-z0-9][^\n\r\"']+)",
-        message,
-        re.IGNORECASE,
-    )
-    if path_after_keyword:
-        raw = path_after_keyword.group(1).strip().rstrip(" .")
-        if raw.lower() in {"desktop", "my desktop", "the desktop"}:
-            return None
-        path = Path(raw)
-        return path if path.is_absolute() else base_root / path
-    return None
-
-
-def _humanize_project_name(value: str) -> str:
-    return value.replace("_", " ").replace("-", " ").strip() or value
+def _try_load_root_json(content: str) -> dict[str, object] | None:
+    trimmed = content.strip()
+    if trimmed.startswith("```"):
+        lines = trimmed.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        trimmed = "\n".join(lines).strip()
+    try:
+        payload = json.loads(trimmed)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _project_folder_name(value: str) -> str:

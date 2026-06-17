@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 from pathlib import Path
 import unittest
@@ -164,14 +165,31 @@ class RootDashboardTests(unittest.TestCase):
         )
         self.assertEqual(200, settings_response.status_code)
 
-        response = client.post(
-            "/root/messages",
-            json={"message": "create a project called Alpha Build"},
-        )
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"action":"tool_call","tool":{"name":"project.create",'
+                                '"input":{"name":"Alpha Build"}}}'
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 9},
+            },
+        ):
+            response = client.post(
+                "/root/messages",
+                json={"message": "create a project called Alpha Build"},
+            )
 
         self.assertEqual(200, response.status_code)
         assistant = response.json()["root"]["messages"][-1]
-        self.assertEqual("local", assistant["status"])
         self.assertIn("Created project Alpha Build", assistant["body"])
         self.assertTrue((workspace_base / "Alpha-Build").is_dir())
 
@@ -194,15 +212,89 @@ class RootDashboardTests(unittest.TestCase):
         module = importlib.import_module("rorven_api.main")
         client = TestClient(module.create_app())
 
-        response = client.post(
-            "/root/messages",
-            json={"message": "can you create a project on my desktop for me?"},
-        )
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"action":"ask","content":"What should the project be called? '
+                                'I will place it under the configured workspace base."}'
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 9},
+            },
+        ):
+            response = client.post(
+                "/root/messages",
+                json={"message": "can you create a project on my desktop for me?"},
+            )
 
         self.assertEqual(200, response.status_code)
         assistant = response.json()["root"]["messages"][-1]
-        self.assertEqual("local", assistant["status"])
-        self.assertIn("What should it be called?", assistant["body"])
+        self.assertIn("What should the project be called?", assistant["body"])
+        self.assertEqual([], client.get("/projects").json()["projects"])
+
+    def test_root_chat_rejects_project_tool_path_outside_workspace_base(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-create-outside-{uuid4()}" / "state"
+        workspace_base = data_dir.parent / "workspaces"
+        outside_root = data_dir.parent / "outside" / "Beta"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+        settings_response = client.post(
+            "/settings/project-defaults",
+            json={"workspace_base_root": str(workspace_base.resolve())},
+        )
+        self.assertEqual(200, settings_response.status_code)
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(
+                                {
+                                    "action": "tool_call",
+                                    "tool": {
+                                        "name": "project.create",
+                                        "input": {
+                                            "name": "Beta",
+                                            "workspace_root": str(outside_root.resolve()),
+                                        },
+                                    },
+                                }
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 9},
+            },
+        ):
+            response = client.post(
+                "/root/messages",
+                json={"message": "create a project called Beta outside the base"},
+            )
+
+        self.assertEqual(200, response.status_code)
+        assistant = response.json()["root"]["messages"][-1]
+        self.assertIn("outside the configured workspace base", assistant["body"])
+        self.assertFalse(outside_root.exists())
         self.assertEqual([], client.get("/projects").json()["projects"])
 
 

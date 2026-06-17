@@ -1,6 +1,5 @@
 import { Bot, User } from "lucide-react";
 import { ChatMessage } from "../../types";
-import { StatusPill } from "../status/StatusPill";
 
 export function ChatBubble({ item }: { item: ChatMessage }) {
   return (
@@ -18,7 +17,6 @@ export function ChatBubble({ item }: { item: ChatMessage }) {
           <time>{new Date(item.time).toLocaleTimeString()}</time>
         </div>
         <p>{item.body}</p>
-        {item.status ? <StatusPill status={item.status} /> : null}
       </div>
     </article>
   );
