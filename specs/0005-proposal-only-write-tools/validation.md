@@ -1,6 +1,6 @@
 # Validation
 
-Validated implementation commit: `94e5094`
+Validated implementation commit: `424b3f0`
 
 ## Evidence
 
@@ -9,7 +9,7 @@ $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 36 tests passed.
+Result: 42 tests passed.
 
 ```powershell
 cd apps/web
@@ -24,6 +24,9 @@ npm.cmd run test:e2e
 ```
 
 Result: 2 Playwright tests passed across desktop and mobile Chromium.
+
+Coverage includes project-chat multi-message rendering so a later message does
+not replace the earlier visible command.
 
 ## Remaining Limitations
 

@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0005-proposal-only-write-tools
-last_verified_commit: 9de921d
+last_verified_commit: 424b3f0
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -57,7 +57,6 @@ next_required_gates:
   - migration-skeleton-plan
   - validation-plan-for-proposal-only-write-tools
   - postgres-repository-slice
-  - approval-ui-slice
   - tool-broker-sandbox-and-recovery-slice
 known_issues:
   - id: I-001
@@ -92,6 +91,6 @@ known_issues:
       yet have full idempotency or interrupted-apply recovery coverage. Agents
       still cannot run shell commands, use git, access the browser, use network
       tools, or retrieve secrets.
-    remediation: Add approval UI, idempotency keys, recovery tests, and sandboxed
-      apply before expanding mutable tools.
+    remediation: Add idempotency keys, recovery tests, and sandboxed apply before
+      expanding mutable tools.
 last_updated: '2026-06-17'
