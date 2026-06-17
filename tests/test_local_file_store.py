@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 from uuid import uuid4
 
+from rorven.adapters.model import DEFAULT_MODEL_IDS
 from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime.langgraph import LangGraphAgentRuntime
 from rorven.adapters.tools import LocalWorkspaceToolBroker
@@ -375,6 +376,7 @@ class LocalFileStoreTests(unittest.TestCase):
         migrated = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual({}, migrated["artifacts"])
         self.assertEqual({}, migrated["approvals"])
+        self.assertEqual(DEFAULT_MODEL_IDS, migrated["settings"]["model_profiles"])
 
 
 if __name__ == "__main__":

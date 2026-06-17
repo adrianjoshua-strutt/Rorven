@@ -31,14 +31,19 @@ OpenRouter chat-completions adapter. Local API and worker processes load
 The key is used only by the adapter and is not returned through settings, events,
 artifacts, prompts, or UI state.
 
+Concrete model IDs are resolved from persisted model-profile settings. The local
+file store seeds usable defaults into `settings.model_profiles` on startup, and
+operators change them through the settings API/UI. Model profile IDs are not read
+from environment variables.
+
 When the key is absent, the composition root refuses to create the model gateway.
 Tests that need deterministic responses patch the OpenRouter adapter or inject a
 test gateway directly into application services; no local product gateway is
 registered in composition.
 
-When the key is present and `RORVEN_MODEL_GATEWAY` is `auto` or `openrouter`,
-root orchestrator messages and project worker tasks use OpenRouter for model
-responses.
+When the key is present, model profiles are configured, and
+`RORVEN_MODEL_GATEWAY` is `auto` or `openrouter`, root orchestrator messages and
+project worker tasks use OpenRouter for model responses.
 
 Project orchestrator worker calls use a strict provider-neutral JSON contract:
 answer directly or dispatch approved child agents with text assignments. The

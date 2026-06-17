@@ -2,6 +2,7 @@
 
 from rorven.adapters.model.openrouter import OpenRouterModelGateway
 from rorven.adapters.model.profiles import (
+    DEFAULT_MODEL_IDS,
     MODEL_PROFILE_NAMES,
     OPENROUTER_KEY_ENV,
     ModelProfileConfig,
@@ -10,6 +11,7 @@ from rorven.adapters.model.profiles import (
 
 __all__ = [
     "MODEL_PROFILE_NAMES",
+    "DEFAULT_MODEL_IDS",
     "ModelProfileConfig",
     "OPENROUTER_KEY_ENV",
     "OpenRouterModelGateway",

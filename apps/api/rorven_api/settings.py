@@ -31,7 +31,7 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             {
                 "name": name,
                 "adapter": model_config.provider_adapter,
-                "model_id": model_config.profile_name(name).model_id or "provider-default",
+                "model_id": model_config.profile_name(name).model_id,
                 "model_id_configured": model_config.profile_name(name).model_id is not None,
                 "request_timeout_seconds": model_config.profile_name(name).request_timeout_seconds,
                 "source": "state.json" if name in persisted_profile_ids else str(model_config.source),

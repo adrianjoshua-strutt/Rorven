@@ -45,16 +45,11 @@ Rorven loads a root `.env` file for local API and worker processes. Create `.env
 RORVEN_OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Optional model-profile pins can be set with:
-
-```powershell
-RORVEN_MODEL_PROFILE_BALANCED=provider/model-id
-RORVEN_MODEL_PROFILE_REASONING=provider/model-id
-```
-
-If no profile model is pinned, the OpenRouter adapter omits `model` and lets the
-provider route the request. Without `RORVEN_OPENROUTER_API_KEY`, the API and worker
-refuse to start the model gateway.
+Model profiles are persisted in Rorven state and can be changed through the
+settings API/UI. On first startup the local state store seeds usable defaults for
+`utility`, `balanced`, `reasoning`, and `frontier`; the OpenRouter adapter always
+sends the resolved profile model ID. Without `RORVEN_OPENROUTER_API_KEY`, the API
+and worker refuse to start the model gateway.
 
 The current worker executes durable project-orchestrator tasks, can dispatch real
 reviewer/implementer subagent tasks, gives child agents one brokered,

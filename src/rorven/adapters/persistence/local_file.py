@@ -10,11 +10,11 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime, timedelta
 import json
-import os
 from pathlib import Path
 from threading import RLock
 from typing import Any, Sequence
 
+from rorven.adapters.model import DEFAULT_MODEL_IDS
 from rorven.application.ports import (
     ApprovalRepository,
     ArtifactStore,
@@ -43,7 +43,6 @@ from rorven.domain import (
 
 
 MODEL_PROFILE_NAMES = ("utility", "balanced", "reasoning", "frontier")
-MODEL_PROFILE_ENV_PREFIX = "RORVEN_MODEL_PROFILE_"
 
 
 class LocalFilePlatformStore(
@@ -447,14 +446,17 @@ class LocalFilePlatformStore(
             profiles = settings["model_profiles"]
             changed = True
 
-        # One-time migration: seed persisted model profile IDs from legacy env vars.
+        # Seed product defaults into persisted settings so model routing is explicit
+        # and user-editable through the settings API.
         for name in MODEL_PROFILE_NAMES:
-            if isinstance(profiles.get(name), str) and profiles[name].strip():
+            if (
+                isinstance(profiles.get(name), str)
+                and profiles[name].strip()
+                and profiles[name].strip() != "replace-me"
+            ):
                 continue
-            env_value = os.environ.get(f"{MODEL_PROFILE_ENV_PREFIX}{name.upper()}")
-            if isinstance(env_value, str) and env_value.strip() and env_value.strip() != "replace-me":
-                profiles[name] = env_value.strip()
-                changed = True
+            profiles[name] = DEFAULT_MODEL_IDS[name]
+            changed = True
         if changed:
             self._write_state(state)
 

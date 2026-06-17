@@ -11,7 +11,12 @@ from rorven.domain import ModelProfile
 
 MODEL_PROFILE_NAMES = ("utility", "balanced", "reasoning", "frontier")
 OPENROUTER_KEY_ENV = "RORVEN_OPENROUTER_API_KEY"
-MODEL_PROFILE_ENV_PREFIX = "RORVEN_MODEL_PROFILE_"
+DEFAULT_MODEL_IDS = {
+    "utility": "meta-llama/llama-3.2-3b-instruct",
+    "balanced": "qwen/qwen3-8b",
+    "reasoning": "qwen/qwen3-8b",
+    "frontier": "qwen/qwen3-8b",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +51,8 @@ def load_model_profile_config(
     profiles = {
         ModelProfile(name): ProfileConfig(
             model_id=_configured_model_id((profile_overrides or {}).get(name))
-            or _configured_model_id(raw_config["profiles"].get(name, {}).get("model_id")),
+            or _configured_model_id(raw_config["profiles"].get(name, {}).get("model_id"))
+            or DEFAULT_MODEL_IDS[name],
             fallback_model_ids=_configured_fallbacks(
                 raw_config["profiles"].get(name, {}).get("fallback_model_ids")
             ),
@@ -114,11 +120,6 @@ def _coerce_scalar(value: str) -> str | int | list[str] | None:
     if value.isdigit():
         return int(value)
     return value.strip('"').strip("'")
-
-
-def _env_model_id(name: str) -> str | None:
-    value = os.environ.get(f"{MODEL_PROFILE_ENV_PREFIX}{name.upper()}")
-    return _configured_model_id(value)
 
 
 def _configured_model_id(value: object) -> str | None:

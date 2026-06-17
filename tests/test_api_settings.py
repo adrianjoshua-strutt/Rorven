@@ -44,6 +44,8 @@ class ApiSettingsTests(unittest.TestCase):
             {"utility", "balanced", "reasoning", "frontier"},
             {profile["name"] for profile in payload["model_profiles"]},
         )
+        self.assertTrue(all(profile["model_id"] for profile in payload["model_profiles"]))
+        self.assertNotIn("provider-default", {profile["model_id"] for profile in payload["model_profiles"]})
 
     def test_model_profile_ids_are_persisted_in_state(self) -> None:
         data_dir = Path("test-output") / "tests" / f"settings-models-{uuid4()}"

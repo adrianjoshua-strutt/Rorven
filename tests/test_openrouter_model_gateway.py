@@ -6,7 +6,12 @@ from unittest.mock import patch
 import unittest
 
 from rorven.adapters.model.openrouter import OpenRouterModelGateway
-from rorven.adapters.model.profiles import ModelProfileConfig, ProfileConfig
+from rorven.adapters.model.profiles import (
+    DEFAULT_MODEL_IDS,
+    ModelProfileConfig,
+    ProfileConfig,
+    load_model_profile_config,
+)
 from rorven.application.modeling import ModelMessage, ModelRequest
 from rorven.domain import ModelProfile
 
@@ -67,6 +72,16 @@ class OpenRouterModelGatewayTests(unittest.TestCase):
         self.assertEqual("run:agent", payload["session_id"])
         self.assertEqual(30, captured["timeout"])
         self.assertNotIn("secret-key", response.content)
+
+    def test_profile_loader_uses_persisted_settings_over_defaults_and_ignores_env_models(self) -> None:
+        with patch.dict("os.environ", {"RORVEN_MODEL_PROFILE_REASONING": "env/should-not-win"}):
+            profiles = load_model_profile_config(
+                path=Path("missing-profile-config.yaml"),
+                profile_overrides={"reasoning": "state/reasoning-model"},
+            )
+
+        self.assertEqual("state/reasoning-model", profiles.profile(ModelProfile.REASONING).model_id)
+        self.assertEqual(DEFAULT_MODEL_IDS["balanced"], profiles.profile(ModelProfile.BALANCED).model_id)
 
 
 if __name__ == "__main__":
