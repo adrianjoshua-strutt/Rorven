@@ -1,6 +1,6 @@
 # Validation
 
-Validated implementation commit: `4cb3b9a`
+Validated implementation commit: `fc7bab6`
 
 ## Evidence
 
