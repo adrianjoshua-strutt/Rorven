@@ -11,5 +11,8 @@
 - [x] Add approved apply tool.
 - [x] Add durable agent transcript entries.
 - [x] Add approval UI ingestion and approve/reject controls.
+- [x] Add API-managed local worker execution loop for single-process local use.
+- [x] Add bounded multi-round subagent tool calls.
+- [x] Keep subagent assignments/results out of the main user/orchestrator chat.
 - [ ] Add sandbox isolation for apply.
 - [ ] Add recovery tests for interrupted apply.

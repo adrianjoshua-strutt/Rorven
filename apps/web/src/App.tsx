@@ -69,8 +69,11 @@ export function App() {
             loadState={consoleState.loadState}
             message={consoleState.message}
             onMessageChange={consoleState.setMessage}
+            onInspectAgent={(agentId) => consoleState.setInspectedAgent({ scope: "project", id: agentId })}
             onSubmit={consoleState.handleSubmitMessage}
             project={consoleState.selectedProject}
+            run={consoleState.selectedRun}
+            subagents={consoleState.subagents}
           />
         )}
       </section>

@@ -11,6 +11,15 @@ export type ChatMessage = {
   status?: string;
 };
 
+export type SubagentWorkSummary = {
+  id: string;
+  title: string;
+  status: string;
+  summary: string;
+  detailCount: number;
+  approvalCount: number;
+};
+
 export type SelectedScope = "root" | "project" | "settings";
 
 export type InspectedAgent =

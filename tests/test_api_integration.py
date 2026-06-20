@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 from pathlib import Path
+from time import sleep
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
@@ -88,6 +89,220 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(1, len(state_payload["artifacts"]))
         self.assertIn("project result", state_payload["artifacts"][0]["content"])
         self.assertTrue((data_dir / "state.json").exists())
+
+    def test_embedded_worker_completes_project_run_from_api_lifespan(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"api-embedded-worker-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        previous_worker = os.environ.get("RORVEN_API_EMBEDDED_WORKER")
+        previous_poll = os.environ.get("RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        self.addCleanup(_restore_env, "RORVEN_API_EMBEDDED_WORKER", previous_worker)
+        self.addCleanup(_restore_env, "RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS", previous_poll)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+        os.environ["RORVEN_API_EMBEDDED_WORKER"] = "1"
+        os.environ["RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS"] = "0.05"
+
+        module = importlib.import_module("rorven_api.main")
+        app = module.create_app()
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"answer","content":"embedded worker result"}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+        ):
+            with TestClient(app) as client:
+                worker_response = client.get("/worker/status")
+                self.assertEqual(200, worker_response.status_code)
+                self.assertTrue(worker_response.json()["worker"]["running"])
+
+                project_response = client.post(
+                    "/projects",
+                    json={
+                        "name": "Embedded Worker Example",
+                        "allowed_root": "D:/workspaces",
+                        "workspace_root": "D:/workspaces/embedded-worker-example",
+                    },
+                )
+                self.assertEqual(201, project_response.status_code)
+                project_id = project_response.json()["project"]["id"]
+
+                run_response = client.post(
+                    f"/projects/{project_id}/runs",
+                    json={"command": "Answer through the embedded worker"},
+                )
+                self.assertEqual(202, run_response.status_code)
+                run_id = run_response.json()["run"]["id"]
+
+                state_payload = None
+                for _ in range(60):
+                    state_response = client.get(f"/projects/{project_id}/runs/{run_id}")
+                    self.assertEqual(200, state_response.status_code)
+                    state_payload = state_response.json()["run"]
+                    if state_payload["status"] == "completed":
+                        break
+                    sleep(0.05)
+
+                self.assertIsNotNone(state_payload)
+                self.assertEqual("completed", state_payload["status"])
+                self.assertIn("embedded worker result", state_payload["artifacts"][0]["content"])
+                final_status = client.get("/worker/status").json()["worker"]
+                self.assertGreaterEqual(final_status["completed_tasks"], 1)
+
+    def test_embedded_worker_runs_subagent_tools_and_approval_flow(self) -> None:
+        root = Path("test-output") / "tests" / f"api-embedded-tools-{uuid4()}"
+        data_dir = root / "state"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        previous_worker = os.environ.get("RORVEN_API_EMBEDDED_WORKER")
+        previous_poll = os.environ.get("RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        self.addCleanup(_restore_env, "RORVEN_API_EMBEDDED_WORKER", previous_worker)
+        self.addCleanup(_restore_env, "RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS", previous_poll)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+        os.environ["RORVEN_API_EMBEDDED_WORKER"] = "1"
+        os.environ["RORVEN_API_EMBEDDED_WORKER_POLL_SECONDS"] = "0.05"
+
+        scripted_responses = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then propose an update."}]}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"action":"tool_calls","tool_calls":['
+                                '{"name":"workspace.read_text_file","input":{"path":"README.md","max_bytes":2000}}'
+                                "]} "
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"action":"tool_calls","tool_calls":['
+                                '{"name":"workspace.propose_text_file_write",'
+                                '"input":{"path":"README.md","content":"Before\\nAfter\\n"}}'
+                                "]} "
+                            ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"final","content":"Read README and proposed an additive update."}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Summary includes the proposed README change.",
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+        ]
+
+        module = importlib.import_module("rorven_api.main")
+        app = module.create_app()
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            side_effect=scripted_responses,
+        ):
+            with TestClient(app) as client:
+                project_response = client.post(
+                    "/projects",
+                    json={
+                        "name": "Embedded Tool Example",
+                        "allowed_root": str(root.resolve()),
+                        "workspace_root": str(workspace.resolve()),
+                    },
+                )
+                self.assertEqual(201, project_response.status_code)
+                project_id = project_response.json()["project"]["id"]
+
+                run_response = client.post(
+                    f"/projects/{project_id}/runs",
+                    json={"command": "Update the README"},
+                )
+                self.assertEqual(202, run_response.status_code)
+                run_id = run_response.json()["run"]["id"]
+
+                state_payload = None
+                for _ in range(80):
+                    state_response = client.get(f"/projects/{project_id}/runs/{run_id}")
+                    self.assertEqual(200, state_response.status_code)
+                    state_payload = state_response.json()["run"]
+                    if state_payload["status"] == "completed":
+                        break
+                    sleep(0.05)
+
+                self.assertIsNotNone(state_payload)
+                self.assertEqual("completed", state_payload["status"])
+                self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+                self.assertEqual(1, len(state_payload["approvals"]))
+                artifact_text = "\n".join(artifact["content"] for artifact in state_payload["artifacts"])
+                self.assertIn("+After", artifact_text)
+                approval_id = state_payload["approvals"][0]["id"]
+
+                approve_response = client.post(
+                    f"/projects/{project_id}/runs/{run_id}/approvals/{approval_id}/approve"
+                )
+                self.assertEqual(200, approve_response.status_code)
+                self.assertEqual("applied", approve_response.json()["approval"]["status"])
+                self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
 
     def test_approval_endpoint_applies_proposed_workspace_write(self) -> None:
         root = Path("test-output") / "tests" / f"api-approval-{uuid4()}"

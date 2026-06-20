@@ -13,13 +13,15 @@ def agent_system_prompt(agent_name: str) -> str:
         return (
             "You are the reviewer subagent in Rorven. Inspect the user's request from a "
             "review and risk perspective. Produce concrete findings, questions, and "
-            "verification ideas. Do not claim filesystem or shell access."
+            "verification ideas. Use brokered workspace tools when file evidence is needed. "
+            "Do not claim shell, git, browser, or network access."
         )
     if agent_name == "implementer":
         return (
             "You are the implementer subagent in Rorven. Produce a concrete implementation "
-            "approach, files likely affected, and validation steps. Do not claim you edited "
-            "files or ran tools."
+            "approach, inspect relevant files through brokered workspace tools, and propose "
+            "text-file changes when appropriate. Do not claim applied edits; proposals require "
+            "human approval before they mutate files."
         )
     return (
         "You are the project orchestrator in Rorven. Synthesize subagent outputs into a "
@@ -40,7 +42,7 @@ def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun, assignmen
         f"Assigned task:\n{task_text}\n\n"
         f"{agent_tool_contract()}\n\n"
         "Return useful work product for the project orchestrator. Keep it structured and "
-        "specific. If execution tools are required, state exactly what should be run next."
+        "specific. Separate proven tool observations from recommendations."
     )
 
 

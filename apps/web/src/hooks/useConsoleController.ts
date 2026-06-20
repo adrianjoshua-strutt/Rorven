@@ -335,5 +335,6 @@ export function useConsoleController() {
     settingsLoadState,
     settingsSnapshot,
     showCreateProject,
+    subagents,
   };
 }

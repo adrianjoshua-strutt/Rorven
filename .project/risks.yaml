@@ -58,7 +58,7 @@ risks:
   - id: R-015
     title: No worker task execution loop means projects silently queue without progressing
     severity: high
-    mitigation: implement the task execution loop (M1) before any user-facing project workflow claims are made; ChatView shows queued status explicitly
+    mitigation: API starts an embedded local worker supervisor by default; standalone worker remains available for production process isolation
   - id: R-016
     title: Approved local workspace apply lacks sandbox and recovery hardening
     severity: high
@@ -67,3 +67,7 @@ risks:
     title: Root project-management tools execute from model-requested actions
     severity: high
     mitigation: require strict provider-neutral root tool contracts, validate payloads in the application layer, and keep filesystem effects scoped to configured operator settings
+  - id: R-018
+    title: Embedded API worker and external worker can both lease tasks
+    severity: medium
+    mitigation: use durable task leases through the shared task queue port; disable the API supervisor with RORVEN_API_EMBEDDED_WORKER=0 when running dedicated workers

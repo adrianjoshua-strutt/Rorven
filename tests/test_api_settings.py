@@ -40,6 +40,8 @@ class ApiSettingsTests(unittest.TestCase):
         self.assertTrue(payload["credentials"][0]["configured"])
         self.assertFalse(payload["credentials"][0]["raw_value_visible"])
         self.assertEqual("openrouter", payload["runtime"]["active_model_gateway"])
+        self.assertTrue(payload["runtime"]["embedded_worker"]["enabled"])
+        self.assertFalse(payload["runtime"]["embedded_worker"]["running"])
         self.assertEqual(
             {"utility", "balanced", "reasoning", "frontier"},
             {profile["name"] for profile in payload["model_profiles"]},

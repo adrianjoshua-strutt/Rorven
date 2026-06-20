@@ -39,6 +39,11 @@ The first implementation slice should exercise real ports and adapters without r
 - `postgres`: system of record and queue foundation
 - optional reverse proxy for TLS and routing
 
+For local single-machine operation, the API starts an embedded worker supervisor by
+default. It calls the same application `WorkerService` as the standalone worker
+entrypoint, so queued project work progresses without a second process while the
+separate worker topology remains available for production isolation and scaling.
+
 ## Source organization
 
 - The web app entrypoint only mounts React providers and the top-level app.

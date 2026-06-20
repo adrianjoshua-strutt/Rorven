@@ -30,6 +30,7 @@ from rorven.application.ports import (
 )
 from rorven.application.tools import (
     DenyAllToolPolicy,
+    MAX_TOOL_ROUNDS,
     ToolExecutionResult,
     ToolRequest,
     parse_agent_tool_instruction,
@@ -49,6 +50,9 @@ from rorven.domain import (
     RunStatus,
     Task,
 )
+
+
+MAX_ORCHESTRATOR_HISTORY_ENTRIES = 12
 
 
 class WorkerService:
@@ -127,47 +131,40 @@ class WorkerService:
         project = self._runs.get_project(agent_run.project_id)
         system_message = ModelMessage("system", agent_system_prompt(agent_run.definition.name))
         task_message = ModelMessage("user", agent_task_prompt(project, run, agent_run, self._assignment(agent_run)))
-        request = ModelRequest(
-            profile=agent_run.definition.model_profile,
-            session_id=f"{agent_run.run_id}:{agent_run.id}",
-            messages=(system_message, task_message),
-        )
-        response = self._model_gateway.complete(request)
-        instruction = parse_agent_tool_instruction(response.content)
-        if not instruction.requests_tools:
-            content = _format_model_response(response, instruction.final_content or response.content)
-            self._append_conversation(
-                agent_run,
-                ConversationRole.ASSISTANT,
-                agent_run.definition.name,
-                content,
+        messages: tuple[ModelMessage, ...] = (system_message, task_message)
+        for tool_round in range(MAX_TOOL_ROUNDS + 1):
+            response = self._model_gateway.complete(
+                ModelRequest(
+                    profile=agent_run.definition.model_profile,
+                    session_id=f"{agent_run.run_id}:{agent_run.id}:tool-round-{tool_round}",
+                    messages=messages,
+                )
             )
-            return content
-
-        tool_results = self._execute_tool_calls(agent_run, instruction.tool_requests)
-        final_response = self._model_gateway.complete(
-            ModelRequest(
-                profile=agent_run.definition.model_profile,
-                session_id=f"{agent_run.run_id}:{agent_run.id}:after-tools",
-                messages=(
-                    system_message,
-                    task_message,
-                    ModelMessage("assistant", response.content),
-                    ModelMessage("user", tool_results_prompt(tool_results)),
+            instruction = parse_agent_tool_instruction(response.content)
+            if not instruction.requests_tools:
+                content = _format_model_response(response, instruction.final_content or response.content)
+                self._append_conversation(
+                    agent_run,
+                    ConversationRole.ASSISTANT,
+                    agent_run.definition.name,
+                    content,
+                )
+                return content
+            if tool_round >= MAX_TOOL_ROUNDS:
+                raise ValueError(f"agent exceeded {MAX_TOOL_ROUNDS} tool rounds")
+            tool_results = self._execute_tool_calls(agent_run, instruction.tool_requests)
+            messages = (
+                *messages,
+                ModelMessage("assistant", response.content),
+                ModelMessage(
+                    "user",
+                    tool_results_prompt(
+                        tool_results,
+                        remaining_tool_rounds=MAX_TOOL_ROUNDS - tool_round - 1,
+                    ),
                 ),
             )
-        )
-        final_instruction = parse_agent_tool_instruction(final_response.content)
-        if final_instruction.requests_tools:
-            raise ValueError("agent requested more than one round of tools")
-        content = _format_model_response(final_response, final_instruction.final_content or final_response.content)
-        self._append_conversation(
-            agent_run,
-            ConversationRole.ASSISTANT,
-            agent_run.definition.name,
-            content,
-        )
-        return content
+        raise RuntimeError("unreachable agent tool loop exit")
 
     def _execute_tool_calls(
         self,
@@ -380,6 +377,7 @@ class WorkerService:
     def _request_orchestrator_decision(self, root: AgentRun) -> ModelResponse:
         run = self._runs.get_run(root.project_id, root.run_id)
         project = self._runs.get_project(root.project_id)
+        conversation_context = self._project_orchestrator_context(root.project_id)
         request = ModelRequest(
             profile=root.definition.model_profile,
             session_id=f"{root.run_id}:{root.id}:dispatch",
@@ -394,6 +392,9 @@ class WorkerService:
                             f"Allowed root: {project.workspace.allowed_root}",
                             f"Run id: {run.id}",
                             "",
+                            "Recent project conversation:",
+                            conversation_context,
+                            "",
                             "User request:",
                             run.command,
                         ]
@@ -403,6 +404,21 @@ class WorkerService:
             max_output_tokens=700,
         )
         return self._model_gateway.complete(request)
+
+    def _project_orchestrator_context(self, project_id: str) -> str:
+        entries = [
+            entry
+            for entry in self._conversations.list_conversation_for_project(project_id)
+            if _is_project_orchestrator_entry(entry)
+        ]
+        if not entries:
+            return "(none)"
+        recent_entries = entries[-MAX_ORCHESTRATOR_HISTORY_ENTRIES:]
+        return "\n".join(
+            f"{_conversation_speaker(entry)}: {entry.body.strip()}"
+            for entry in recent_entries
+            if entry.body.strip()
+        )
 
     def _persist_child_dispatch(
         self,
@@ -704,18 +720,8 @@ class WorkerService:
             ]
         )
 
-def _format_usage(usage: dict[str, object]) -> str:
-    total = usage.get("total_tokens")
-    if isinstance(total, int):
-        return f" / tokens: {total}"
-    return ""
-
-
-def _format_model_response(response: ModelResponse, content: str) -> str:
-    model_line = f"Model: {response.provider}"
-    if response.model:
-        model_line = f"{model_line}/{response.model}"
-    return f"{model_line}{_format_usage(response.usage)}\n\n{content.strip()}"
+def _format_model_response(_response: ModelResponse, content: str) -> str:
+    return content.strip()
 
 
 def _safe_tool_input(request: ToolRequest) -> dict[str, object]:
@@ -729,6 +735,20 @@ def _safe_tool_input(request: ToolRequest) -> dict[str, object]:
             continue
         result[key] = value
     return result
+
+
+def _is_project_orchestrator_entry(entry: ConversationEntry) -> bool:
+    if entry.role == ConversationRole.USER:
+        return entry.title == "You"
+    if entry.role == ConversationRole.ASSISTANT:
+        return entry.title in {"Project orchestrator", "orchestrator"}
+    return False
+
+
+def _conversation_speaker(entry: ConversationEntry) -> str:
+    if entry.role == ConversationRole.USER:
+        return "User"
+    return "Project orchestrator"
 
 
 def _dispatch_summary(decision: OrchestratorDecision) -> str:

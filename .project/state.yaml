@@ -35,6 +35,7 @@ current_decisions:
   initial_approval_adapter: local-file-store-state-json
   workspace_provisioning_abstraction: WorkspaceProvisioner
   initial_workspace_provisioning_adapter: local-filesystem-scoped-base-root
+  local_execution_mode: api-managed-embedded-worker-by-default
   memory_abstraction: MemoryBackend
   initial_memory_backend: postgres
   sandbox_abstraction: SandboxProvider
@@ -51,6 +52,7 @@ working_state:
   frontend_dev_server: npx vite --port 5174 (from apps/web)
   data_dir: .rorven/state.json
   openrouter_key_env: RORVEN_OPENROUTER_API_KEY
+  embedded_worker: enabled in the API process by default; set RORVEN_API_EMBEDDED_WORKER=0 to run external workers only
 next_required_gates:
   - adr-review-for-first-slice
   - module-map-for-first-slice
@@ -84,13 +86,13 @@ known_issues:
   - id: I-004
     title: workspace writes require approval but are not sandboxed
     description: >
-      Child agents can request one round of policy-checked workspace inspection
-      tools and text-file write proposals. Successful proposals create pending
-      approval records, and explicit approval applies the proposed text through
-      the workspace broker. The local apply adapter is not sandboxed and does not
-      yet have full idempotency or interrupted-apply recovery coverage. Agents
-      still cannot run shell commands, use git, access the browser, use network
-      tools, or retrieve secrets.
+      Child agents can request bounded multi-round policy-checked workspace
+      inspection tools and text-file write proposals. Successful proposals
+      create pending approval records, and explicit approval applies the
+      proposed text through the workspace broker. The local apply adapter is not
+      sandboxed and does not yet have full idempotency or interrupted-apply
+      recovery coverage. Agents still cannot run shell commands, use git,
+      access the browser, use network tools, or retrieve secrets.
     remediation: Add idempotency keys, recovery tests, and sandboxed apply before
       expanding mutable tools.
-last_updated: '2026-06-17'
+last_updated: '2026-06-20'

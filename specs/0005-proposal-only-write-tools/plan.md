@@ -12,6 +12,13 @@
    results, approvals, and final answers.
 8. Add console approval ingestion and approve/reject controls in the subagent
    work view.
+9. Add an API-managed local worker supervisor so local project chat progresses
+   without manually starting a separate worker process.
+10. Allow child agents to use bounded multi-round workspace tools, so they can
+    inspect files before proposing text changes.
+11. Render project chat as root user/orchestrator turns and surface subagent
+    work as inspectable returned work instead of blending assignments into the
+    main conversation.
 
 ## Next Slices
 

@@ -11,6 +11,7 @@ export function RuntimeSection({
   apiEndpoint: string;
   settings: SettingsSnapshot | null;
 }) {
+  const worker = settings?.runtime.embedded_worker;
   return (
     <section className="settings-section">
       <SectionTitle
@@ -25,6 +26,12 @@ export function RuntimeSection({
           value={settings?.runtime.active_runtime_adapter ?? "Unknown"}
           state="configured"
           detail={`Planned: ${settings?.runtime.planned_runtime_adapter ?? "langgraph"}`}
+        />
+        <SettingsTile
+          label="Local worker"
+          value={worker?.running ? "Running" : worker?.enabled ? "Starting" : "Disabled"}
+          state={worker?.running ? "configured" : "deferred"}
+          detail={worker ? `${worker.worker_id} / ${worker.completed_tasks} tasks completed` : "Managed by the API process."}
         />
         <SettingsTile
           label="Model gateway"

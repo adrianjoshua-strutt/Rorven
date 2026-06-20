@@ -10,7 +10,15 @@ The current runtime adapter uses LangGraph behind `AgentRuntime`. There is no pr
 
 Each project message creates a durable run and one root orchestrator `agent_run` before execution begins. A task is queued for that root agent. A worker leases the task and asks the orchestrator for a structured dispatch decision through the model gateway.
 
-The orchestrator may answer directly or dispatch approved child subagents. Dispatch is represented as provider-neutral JSON parsed in the application layer. The platform persists child assignments as artifacts and transcript entries, creates child `agent_run` records and tasks, marks the parent run waiting, then lets workers execute the child tasks. When all child runs complete, the root orchestrator summarizes their artifacts and completes the run.
+The orchestrator may answer directly or dispatch approved child subagents. The
+worker supplies a bounded recent project conversation context containing only
+root user and orchestrator turns, so follow-up requests can refer to earlier
+messages without exposing child-agent internals as chat history. Dispatch is
+represented as provider-neutral JSON parsed in the application layer. The
+platform persists child assignments as artifacts and transcript entries, creates
+child `agent_run` records and tasks, marks the parent run waiting, then lets
+workers execute the child tasks. When all child runs complete, the root
+orchestrator summarizes their artifacts and completes the run.
 
 The platform only creates child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
 
@@ -30,11 +38,34 @@ An agent run contains:
 - inspectable transcript entries
 - usage and cost
 
+## Local execution loop
+
+The standalone worker process is the durable execution boundary for production
+topologies, but local Rorven should not require the operator to start a second
+Python command before a project chat can progress. The API therefore starts an
+embedded worker supervisor by default during its FastAPI lifespan.
+
+The supervisor does not introduce a second execution implementation. It calls the
+same application-layer `WorkerService.work_once` method used by the standalone
+worker entrypoint, leases tasks through the same task queue port, and exposes its
+state through `/worker/status`, `/health`, and Settings runtime data. It can be
+disabled with `RORVEN_API_EMBEDDED_WORKER=0` when an external worker process is
+preferred.
+
+This keeps the local product behavior single-command while preserving the
+separate API/worker process topology for scale, isolation, and future scheduler
+coordination.
+
 ## Parallel work
 
 The orchestrator can create multiple child runs in one repository transaction. Workers lease them independently. A durable join condition determines when the parent becomes summarizable again.
 
-The current implementation supports reviewer and implementer child runs. Tool authority, sandbox execution, broad agent catalogs, and permission-profile evaluation remain separate slices.
+The current implementation supports reviewer and implementer child runs. Child
+agents can use bounded multi-round brokered workspace tools for listing files,
+reading text files, and proposing text-file writes. Proposed writes create
+approval records and do not mutate the workspace until explicitly approved.
+Shell, git, browser, network, sandbox execution, broad agent catalogs, and full
+permission-profile evaluation remain separate slices.
 
 ## Recovery
 

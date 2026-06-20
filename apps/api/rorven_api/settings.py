@@ -9,7 +9,7 @@ from typing import Any
 from rorven.adapters.model import MODEL_PROFILE_NAMES, OPENROUTER_KEY_ENV, load_model_profile_config
 
 
-def read_settings(data_dir: Path) -> dict[str, Any]:
+def read_settings(data_dir: Path, worker_status: dict[str, Any] | None = None) -> dict[str, Any]:
     persisted_profile_ids = _read_persisted_model_profile_ids(data_dir)
     model_config = load_model_profile_config(profile_overrides=persisted_profile_ids)
     api_key_configured = bool(os.environ.get(OPENROUTER_KEY_ENV))
@@ -42,6 +42,7 @@ def read_settings(data_dir: Path) -> dict[str, Any]:
             "active_runtime_adapter": "langgraph",
             "planned_runtime_adapter": "langgraph",
             "active_model_gateway": active_model_gateway,
+            "embedded_worker": worker_status,
             "system_of_record": "local-file-json",
             "planned_system_of_record": "postgresql",
             "data_dir": str(data_dir),

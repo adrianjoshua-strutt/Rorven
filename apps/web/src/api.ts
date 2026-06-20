@@ -120,6 +120,16 @@ export type SettingsSnapshot = {
     active_runtime_adapter: string;
     planned_runtime_adapter: string;
     active_model_gateway: string;
+    embedded_worker: {
+      enabled: boolean;
+      running: boolean;
+      worker_id: string;
+      poll_interval_seconds: number;
+      completed_tasks: number;
+      loop_count: number;
+      last_started_at: string | null;
+      last_error: string | null;
+    } | null;
     system_of_record: string;
     planned_system_of_record: string;
     data_dir: string;

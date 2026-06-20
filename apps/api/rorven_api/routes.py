@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -24,10 +25,18 @@ from rorven_api.serializers import (
 from rorven_api.settings import read_settings
 
 
-def register_routes(app: FastAPI, services: LocalServices) -> None:
+def register_routes(
+    app: FastAPI,
+    services: LocalServices,
+    worker_status: Callable[[], dict[str, Any]] | None = None,
+) -> None:
     @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ready", "data_dir": str(services.data_dir)}
+    def health() -> dict[str, Any]:
+        return {
+            "status": "ready",
+            "data_dir": str(services.data_dir),
+            "worker": worker_status() if worker_status else None,
+        }
 
     @app.get("/projects")
     def list_projects() -> dict[str, Any]:
@@ -37,7 +46,7 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
 
     @app.get("/settings")
     def get_settings() -> dict[str, Any]:
-        return {"settings": read_settings(services.data_dir)}
+        return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}
 
     @app.post("/settings/model-profiles")
     def update_model_profiles(request: ModelProfileSettingsRequest) -> dict[str, Any]:
@@ -53,7 +62,7 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
             if value is not None
         }
         services.store.set_model_profile_ids(normalized)
-        return {"settings": read_settings(services.data_dir)}
+        return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}
 
     @app.post("/settings/project-defaults")
     def update_project_defaults(request: ProjectDefaultsSettingsRequest) -> dict[str, Any]:
@@ -61,7 +70,7 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
             services.store.set_workspace_base_root(request.workspace_base_root)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"settings": read_settings(services.data_dir)}
+        return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}
 
     @app.get("/root")
     def get_root() -> dict[str, Any]:
@@ -144,3 +153,7 @@ def register_routes(app: FastAPI, services: LocalServices) -> None:
     def work_once(request: WorkOnceRequest) -> dict[str, Any]:
         completed = services.worker.work_once(worker_id=request.worker_id, limit=request.limit)
         return {"completed_tasks": [task_to_api(task) for task in completed]}
+
+    @app.get("/worker/status")
+    def get_worker_status() -> dict[str, Any]:
+        return {"worker": worker_status() if worker_status else None}

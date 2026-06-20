@@ -10,6 +10,7 @@ from rorven.domain import AgentRun, Project
 
 
 MAX_TOOL_CALLS = 3
+MAX_TOOL_ROUNDS = 3
 MAX_READ_BYTES = 20_000
 MAX_LIST_ENTRIES = 200
 MAX_PROPOSED_TEXT_BYTES = 40_000
@@ -111,8 +112,9 @@ class DenyAllToolPolicy:
 
 def agent_tool_contract() -> str:
     return (
-        "You may either produce a final answer or request one round of read-only "
-        "workspace tools.\n\n"
+        "You may either produce a final answer or request brokered workspace tools. "
+        f"You may request up to {MAX_TOOL_ROUNDS} tool rounds, with at most "
+        f"{MAX_TOOL_CALLS} tool calls in one round.\n\n"
         "For a final answer, return useful prose normally or JSON in this shape:\n"
         '{"action":"final","content":"your final work product"}\n\n'
         "To request tools, return exactly one JSON object and no prose outside it:\n"
@@ -126,16 +128,23 @@ def agent_tool_contract() -> str:
         "diff proposal; it does not modify files. Tools are policy checked, audited, "
         "and cannot access obvious secret paths such as .env, .git, key, token, or "
         "credential files. Do not claim shell commands, git actions, browser access, "
-        "or applied file edits."
+        "or applied file edits. Only claim workspace inspection or proposed edits when "
+        "the tool results prove them."
     )
 
 
-def tool_results_prompt(results: list[dict[str, Any]]) -> str:
-    return (
-        "Brokered tool results are below. Produce the final work product now. "
-        "Do not request more tools in this run.\n\n"
-        + json.dumps(results, indent=2, sort_keys=True)
-    )
+def tool_results_prompt(results: list[dict[str, Any]], remaining_tool_rounds: int = 0) -> str:
+    if remaining_tool_rounds > 0:
+        instruction = (
+            "Brokered tool results are below. Produce the final work product now, "
+            f"or request another tool round if required. Remaining tool rounds: {remaining_tool_rounds}."
+        )
+    else:
+        instruction = (
+            "Brokered tool results are below. Produce the final work product now. "
+            "Do not request more tools in this run."
+        )
+    return instruction + "\n\n" + json.dumps(results, indent=2, sort_keys=True)
 
 
 def parse_agent_tool_instruction(content: str) -> AgentToolInstruction:

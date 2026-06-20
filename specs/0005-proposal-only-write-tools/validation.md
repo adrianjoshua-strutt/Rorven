@@ -1,6 +1,7 @@
 # Validation
 
-Validated implementation commit: `424b3f0`
+Validated implementation commit: pending commit for embedded worker, bounded
+subagent tool loop, and chat-context fixes.
 
 ## Evidence
 
@@ -9,7 +10,7 @@ $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 42 tests passed.
+Result: 46 tests passed.
 
 ```powershell
 cd apps/web
@@ -28,9 +29,39 @@ Result: 2 Playwright tests passed across desktop and mobile Chromium.
 Coverage includes project-chat multi-message rendering so a later message does
 not replace the earlier visible command.
 
+## 2026-06-20 follow-up evidence
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+Result: 46 tests passed.
+
+Coverage includes:
+
+- API lifespan embedded worker completes a queued project run.
+- API lifespan embedded worker runs a dispatched implementer subagent through
+  read-file and propose-write tools, then approval applies the change.
+- Worker supplies recent project chat context to the project orchestrator.
+- Child agents can use multiple bounded tool rounds.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: build passed.
+
+Playwright browser validation was attempted twice during live debugging and was
+interrupted by the operator before completion; do not treat the current follow-up
+slice as browser-validated until it is rerun.
+
 ## Remaining Limitations
 
 - No sandbox isolation for mutable actions exists yet.
 - Approved local text-file writes do not yet have full idempotency keys or
   interrupted-apply recovery tests.
 - No shell, git, browser, network, or external service tools.
+- Follow-up browser validation for the embedded worker/chat UI slice is still
+  outstanding after interrupted Playwright runs.

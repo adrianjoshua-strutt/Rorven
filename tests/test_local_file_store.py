@@ -192,6 +192,47 @@ class LocalFileStoreTests(unittest.TestCase):
         artifact_text = "\n".join(failed_state.artifact_contents.values())
         self.assertIn("orchestrator response was not valid JSON", artifact_text)
 
+    def test_orchestrator_receives_recent_project_conversation_context(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-history-{uuid4()}"
+        root.mkdir(parents=True, exist_ok=True)
+        store = LocalFilePlatformStore(root)
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+            approvals=store,
+            conversations=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"answer","content":"I can propose README.md with test after approval."}',
+                '{"action":"answer","content":"I remember the requested README.md content."}',
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            approvals=store,
+            conversations=store,
+        )
+
+        project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
+        projects.submit_task(project.id, 'create README.md that says "test"')
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        projects.submit_task(project.id, "just create the file I told you to")
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+
+        second_prompt = gateway.requests[1].messages[1].content
+
+        self.assertIn('User: create README.md that says "test"', second_prompt)
+        self.assertIn("Project orchestrator: I can propose README.md with test after approval.", second_prompt)
+        self.assertIn("User request:\njust create the file I told you to", second_prompt)
+
     def test_child_agent_uses_brokered_read_only_workspace_tool(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-tools-{uuid4()}"
         workspace = root / "workspace"
@@ -329,6 +370,79 @@ class LocalFileStoreTests(unittest.TestCase):
             "approval.applied",
             [event.type.value for event in after_approval_state.events],
         )
+
+    def test_child_agent_can_read_then_propose_across_tool_rounds(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-tool-loop-{uuid4()}"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        readme = workspace / "README.md"
+        readme.write_text("Before\n", encoding="utf-8")
+        store = LocalFilePlatformStore(root / "state")
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+            approvals=store,
+            conversations=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then propose an update."}]}',
+                (
+                    '{"action":"tool_calls","tool_calls":['
+                    '{"name":"workspace.read_text_file","input":{"path":"README.md","max_bytes":2000}}'
+                    "]} "
+                ),
+                (
+                    '{"action":"tool_calls","tool_calls":['
+                    '{"name":"workspace.propose_text_file_write",'
+                    '"input":{"path":"README.md","content":"Before\\nAfter\\n"}}'
+                    "]} "
+                ),
+                '{"action":"final","content":"Read README and proposed an additive update."}',
+                "Summary includes the proposed README change.",
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            approvals=store,
+            conversations=store,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
+        )
+
+        project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
+        run_state = projects.submit_task(project.id, "Update the README")
+
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        finished_state = projects.get_run_state(project.id, run_state.run.id)
+        artifact_text = "\n".join(finished_state.artifact_contents.values())
+        event_types = [event.type.value for event in finished_state.events]
+
+        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+        self.assertEqual(1, len(finished_state.approvals))
+        self.assertGreaterEqual(event_types.count("tool.completed"), 2)
+        self.assertIn("Before", artifact_text)
+        self.assertIn("+After", artifact_text)
+        self.assertIn("Read README and proposed an additive update.", artifact_text)
+
+        approvals = ApprovalService(
+            runs=store,
+            approvals=store,
+            artifacts=store,
+            tool_broker=LocalWorkspaceToolBroker(),
+            conversations=store,
+        )
+        approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
+        self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
 
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-order-{uuid4()}"
