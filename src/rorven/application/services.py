@@ -78,6 +78,9 @@ class RootDashboardState:
     activities: Sequence[RootActivity]
 
 
+MAX_ROOT_HISTORY_MESSAGES = 12
+
+
 class ProjectService:
     def __init__(
         self,
@@ -380,6 +383,7 @@ class RootService:
         return RootDashboardState(messages=messages, activities=[])
 
     def submit_message(self, message: str) -> RootDashboardState:
+        prior_messages = self._filtered_root_messages()[-MAX_ROOT_HISTORY_MESSAGES:]
         user_message = {
             "id": f"root-user-{len(self._root_messages.list_root_messages()) + 1}",
             "side": "user",
@@ -399,7 +403,15 @@ class RootService:
                         "system",
                         _root_system_prompt(),
                     ),
-                    ModelMessage("user", _build_root_prompt(projects, message)),
+                    ModelMessage("user", _build_root_context_prompt(projects, len(prior_messages))),
+                    ModelMessage("system", _root_history_begin(len(prior_messages))),
+                    *(
+                        _root_message_to_model_message(root_message)
+                        for root_message in prior_messages
+                        if str(root_message.get("body", "")).strip()
+                    ),
+                    ModelMessage("system", _root_history_end(len(prior_messages))),
+                    ModelMessage("user", _build_root_current_request_prompt(message)),
                 ),
                 max_output_tokens=240,
             )
@@ -487,22 +499,63 @@ def _root_system_prompt() -> str:
             "If the user asks to create a project without a name, ask for the name.",
             "If workspace_root is omitted, Rorven will place the project under the configured workspace base.",
             "Plain chat text must not use Markdown, headings, bullets, or code fences.",
+            "Each request is framed as live project inventory, prior root conversation history, and the current user request.",
+            "Use the prior conversation history to resolve follow-up requests and missing details.",
         ]
     )
 
 
-def _build_root_prompt(projects: Sequence[dict[str, object]], command: str) -> str:
+def _build_root_context_prompt(projects: Sequence[dict[str, object]], history_count: int) -> str:
     lines = [
-        f"User request: {command}",
+        "Root project context for the current request:",
         "Live project inventory:",
     ]
     for project in projects:
         lines.append(
             f"- {project['name']} at {project['workspace_root']}: {project['runs']} runs, {project['active_runs']} active, {project['completed_runs']} completed"
         )
-    lines.append(
-        "Respond with the root action JSON contract from the system message."
+    if not projects:
+        lines.append("- No projects currently registered.")
+    lines.extend(
+        [
+            f"Prior root chat turns available: {history_count}",
+            "The next section contains durable prior root chat turns, oldest to newest.",
+        ]
     )
+    return "\n".join(lines)
+
+
+def _root_history_begin(history_count: int) -> str:
+    if history_count == 0:
+        return "Begin root conversation history. No prior root chat turns exist before the current request."
+    return (
+        "Begin root conversation history. The following user and assistant messages are "
+        "durable prior root chat turns, ordered oldest to newest."
+    )
+
+
+def _root_history_end(history_count: int) -> str:
+    if history_count == 0:
+        return "End root conversation history. The next user message is the current request."
+    return (
+        "End root conversation history. The transcript above is available context for "
+        f"this request and contains {history_count} prior turn(s). The next user message "
+        "is the current request."
+    )
+
+
+def _root_message_to_model_message(message: dict[str, str]) -> ModelMessage:
+    side = message.get("side")
+    if side == "user":
+        return ModelMessage("user", str(message.get("body", "")).strip())
+    return ModelMessage("assistant", str(message.get("body", "")).strip())
+
+
+def _build_root_current_request_prompt(command: str) -> str:
+    lines = [
+        f"Current user request: {command}",
+        "Respond with the root action JSON contract from the system message.",
+    ]
     return "\n".join(lines)
 
 

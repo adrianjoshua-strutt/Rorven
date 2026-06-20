@@ -146,6 +146,65 @@ class RootDashboardTests(unittest.TestCase):
         self.assertNotIn("- No projects", assistant["body"])
         self.assertIn("Live Project Inventory:", assistant["body"])
 
+    def test_root_chat_sends_prior_messages_as_explicit_history(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-history-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            side_effect=[
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": '{"action":"answer","content":"Hi."}',
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": '{"action":"answer","content":"You said hello."}',
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+            ],
+        ) as post_json:
+            self.assertEqual(200, client.post("/root/messages", json={"message": "hello"}).status_code)
+            self.assertEqual(200, client.post("/root/messages", json={"message": "what did I say?"}).status_code)
+
+        second_payload = post_json.call_args_list[1].args[0]
+        messages = second_payload["messages"]
+
+        self.assertEqual(
+            ["system", "user", "system", "user", "assistant", "system", "user"],
+            [message["role"] for message in messages],
+        )
+        self.assertIn("Prior root chat turns available: 2", messages[1]["content"])
+        self.assertIn("Begin root conversation history", messages[2]["content"])
+        self.assertEqual("hello", messages[3]["content"])
+        self.assertEqual("Hi.", messages[4]["content"])
+        self.assertIn("End root conversation history", messages[5]["content"])
+        self.assertIn("Current user request: what did I say?", messages[6]["content"])
+
     def test_root_chat_creates_project_under_configured_workspace_base(self) -> None:
         data_dir = Path("test-output") / "tests" / f"root-create-{uuid4()}" / "state"
         workspace_base = data_dir.parent / "workspaces"

@@ -47,6 +47,8 @@ from rorven.domain import (
     Event,
     EventType,
     ModelProfile,
+    Project,
+    Run,
     RunStatus,
     Task,
 )
@@ -386,24 +388,14 @@ class WorkerService:
             session_id=f"{root.run_id}:{root.id}:dispatch",
             messages=(
                 ModelMessage("system", orchestrator_dispatch_contract()),
-                ModelMessage(
-                    "user",
-                    "\n".join(
-                        [
-                            f"Project: {project.name}",
-                            f"Workspace root: {project.workspace.workspace_root}",
-                            f"Allowed root: {project.workspace.allowed_root}",
-                            f"Run id: {run.id}",
-                            "",
-                            "Use the following chat history messages as real context.",
-                        ]
-                    ),
-                ),
+                ModelMessage("user", _orchestrator_project_context(project, run, len(conversation_history))),
+                ModelMessage("system", _orchestrator_history_begin(len(conversation_history))),
                 *(
                     ModelMessage(_model_role_for_entry(entry), entry.body.strip())
                     for entry in conversation_history
                     if entry.body.strip()
                 ),
+                ModelMessage("system", _orchestrator_history_end(len(conversation_history))),
                 ModelMessage("user", run.command),
             ),
             max_output_tokens=700,
@@ -759,6 +751,48 @@ def _model_role_for_entry(entry: ConversationEntry) -> str:
     if entry.role == ConversationRole.USER:
         return "user"
     return "assistant"
+
+
+def _orchestrator_project_context(project: Project, run: Run, history_count: int) -> str:
+    return "\n".join(
+        [
+            "Project context for the current request:",
+            f"- Project: {project.name}",
+            f"- Workspace root: {project.workspace.workspace_root}",
+            f"- Allowed root: {project.workspace.allowed_root}",
+            f"- Run id: {run.id}",
+            f"- Prior project chat turns available: {history_count}",
+            "",
+            "The next section contains durable prior chat turns for this project, oldest to newest.",
+            "Use those turns as the conversation history for resolving follow-ups and deciding whether to answer or dispatch.",
+        ]
+    )
+
+
+def _orchestrator_history_begin(history_count: int) -> str:
+    if history_count == 0:
+        return (
+            "Begin project conversation history. No prior user/orchestrator chat turns exist "
+            "before the current request."
+        )
+    return (
+        "Begin project conversation history. The following user and assistant messages are "
+        "the durable prior chat turns for this project, ordered oldest to newest."
+    )
+
+
+def _orchestrator_history_end(history_count: int) -> str:
+    if history_count == 0:
+        return (
+            "End project conversation history. The next user message is the current request."
+        )
+    return (
+        "End project conversation history. The transcript above is available context for "
+        f"this request and contains {history_count} prior turn(s). The next user message "
+        "is the current request. If the user asks about previous messages, answer from "
+        "the transcript above. Resolve references like 'that', 'the file', 'the folder', "
+        "or 'what I told you' from the transcript before choosing answer or dispatch."
+    )
 
 
 def _dispatch_summary(decision: OrchestratorDecision) -> str:

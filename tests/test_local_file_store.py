@@ -231,13 +231,65 @@ class LocalFileStoreTests(unittest.TestCase):
 
         self.assertEqual("system", second_messages[0].role)
         self.assertEqual("user", second_messages[1].role)
-        self.assertIn("Use the following chat history messages as real context.", second_messages[1].content)
-        self.assertEqual("user", second_messages[2].role)
-        self.assertEqual('create README.md that says "test"', second_messages[2].content)
-        self.assertEqual("assistant", second_messages[3].role)
-        self.assertEqual("I can propose README.md with test after approval.", second_messages[3].content)
-        self.assertEqual("user", second_messages[4].role)
-        self.assertEqual("just create the file I told you to", second_messages[4].content)
+        self.assertIn("Prior project chat turns available: 2", second_messages[1].content)
+        self.assertEqual("system", second_messages[2].role)
+        self.assertIn("Begin project conversation history", second_messages[2].content)
+        self.assertEqual("user", second_messages[3].role)
+        self.assertEqual('create README.md that says "test"', second_messages[3].content)
+        self.assertEqual("assistant", second_messages[4].role)
+        self.assertEqual("I can propose README.md with test after approval.", second_messages[4].content)
+        self.assertEqual("system", second_messages[5].role)
+        self.assertIn("End project conversation history", second_messages[5].content)
+        self.assertEqual("user", second_messages[6].role)
+        self.assertEqual("just create the file I told you to", second_messages[6].content)
+
+    def test_orchestrator_keeps_prior_assistant_turns_inside_explicit_history(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-history-boundary-{uuid4()}"
+        root.mkdir(parents=True, exist_ok=True)
+        store = LocalFilePlatformStore(root)
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+            approvals=store,
+            conversations=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"answer","content":"I do not have access to previous messages."}',
+                '{"action":"answer","content":"You asked whether I had previous messages."}',
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            approvals=store,
+            conversations=store,
+        )
+
+        project = projects.create_project("Example", "D:/workspaces", "D:/workspaces/example")
+        projects.submit_task(project.id, "what are the previous messages?")
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        projects.submit_task(project.id, "what about now?")
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+
+        second_messages = gateway.requests[1].messages
+
+        self.assertEqual("system", second_messages[2].role)
+        self.assertIn("Begin project conversation history", second_messages[2].content)
+        self.assertEqual("user", second_messages[3].role)
+        self.assertEqual("what are the previous messages?", second_messages[3].content)
+        self.assertEqual("assistant", second_messages[4].role)
+        self.assertEqual("I do not have access to previous messages.", second_messages[4].content)
+        self.assertEqual("system", second_messages[5].role)
+        self.assertIn("answer from the transcript above", second_messages[5].content)
+        self.assertEqual("user", second_messages[6].role)
+        self.assertEqual("what about now?", second_messages[6].content)
 
     def test_child_agent_uses_brokered_read_only_workspace_tool(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-tools-{uuid4()}"

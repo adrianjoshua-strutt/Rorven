@@ -54,12 +54,12 @@ def orchestrator_dispatch_contract() -> str:
         '{"action":"dispatch","subagents":[{"name":"reviewer","task":"specific assignment"},'
         '{"name":"implementer","task":"specific assignment"}]}\n\n'
         f"Allowed subagent names: {allowed}.\n"
-        "Previous project chat turns are provided as prior user and assistant messages "
-        "before the current request. Treat them as real conversation history. If the "
-        "user asks whether you have previous messages, answer from those prior messages. "
-        "Never say previous messages are inaccessible when prior messages are present.\n"
-        "Use the previous project conversation to resolve follow-up references such as "
-        "'that file', 'the folder', or 'what I told you'.\n"
+        "Each request is framed as project context, an explicit prior project conversation "
+        "history section, and then the current user message. Treat the prior conversation "
+        "section as the real project chat history available to you for this request.\n"
+        "If the user asks about previous messages, answer from the provided prior "
+        "conversation. Use that history to resolve follow-up references such as "
+        "'that file', 'the folder', 'what about now', or 'what I told you'.\n"
         "Use a direct answer only for conversation, explanation, or questions that do "
         "not require workspace evidence or file-change proposals.\n"
         "If the request requires listing files, reading files, checking workspace state, "
