@@ -7,6 +7,8 @@ export type Project = {
   };
   created_at: string;
   runs?: RunSummary[];
+  agent_runs?: AgentRun[];
+  tasks?: Task[];
   conversation_entries?: ConversationEntry[];
 };
 

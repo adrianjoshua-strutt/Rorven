@@ -9,15 +9,9 @@ export type ChatMessage = {
   body: string;
   time: string;
   status?: string;
-};
-
-export type SubagentWorkSummary = {
-  id: string;
-  title: string;
-  status: string;
-  summary: string;
-  detailCount: number;
-  approvalCount: number;
+  kind?: "chat" | "subagent";
+  agentId?: string;
+  actionLabel?: string;
 };
 
 export type SelectedScope = "root" | "project" | "settings";

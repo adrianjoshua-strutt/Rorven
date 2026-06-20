@@ -395,6 +395,15 @@ button:focus-visible {
   background: var(--user);
 }
 
+.chat-bubble.subagent {
+  max-width: min(680px, 76%);
+}
+
+.chat-bubble.subagent .bubble-body {
+  border-color: rgba(123, 166, 255, 0.32);
+  background: #11181c;
+}
+
 .bubble-meta {
   display: flex;
   align-items: center;
@@ -404,79 +413,32 @@ button:focus-visible {
   font-size: 0.78rem;
 }
 
+.bubble-meta span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .bubble-body p {
   margin: 8px 0 10px;
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
-.subagent-inline-panel {
-  width: min(760px, 86%);
-  align-self: flex-start;
-  border: 1px solid rgba(123, 166, 255, 0.28);
-  background: #11171a;
-  padding: 10px;
-  display: grid;
-  gap: 10px;
-}
-
-.subagent-inline-title,
-.subagent-inline-title span,
-.subagent-inline-meta {
-  display: flex;
-  align-items: center;
-}
-
-.subagent-inline-title {
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.subagent-inline-title span {
-  gap: 7px;
-  color: var(--blue);
-}
-
-.subagent-inline-list {
-  display: grid;
-  gap: 8px;
-}
-
-.subagent-inline-card {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px;
-  align-items: center;
-  gap: 10px;
+.bubble-action {
+  min-height: 30px;
   border: 1px solid var(--line);
   background: var(--pane-3);
   color: var(--text);
-  text-align: left;
-  padding: 10px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
 }
 
-.subagent-inline-card:hover {
+.bubble-action:hover {
   border-color: rgba(123, 166, 255, 0.45);
-  background: #141b1f;
-}
-
-.subagent-inline-meta {
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.subagent-inline-card p {
-  margin: 8px 0;
-  color: var(--muted);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.subagent-inline-card span {
-  color: var(--faint);
-  font-size: 0.76rem;
+  background: #151d22;
 }
 
 .composer {

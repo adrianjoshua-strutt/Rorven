@@ -131,8 +131,18 @@ class WorkerService:
     def _run_agent(self, agent_run: AgentRun) -> str:
         run = self._runs.get_run(agent_run.project_id, agent_run.run_id)
         project = self._runs.get_project(agent_run.project_id)
+        conversation_history = self._project_orchestrator_entries(agent_run.project_id)
         system_message = ModelMessage("system", agent_system_prompt(agent_run.definition.name))
-        task_message = ModelMessage("user", agent_task_prompt(project, run, agent_run, self._assignment(agent_run)))
+        task_message = ModelMessage(
+            "user",
+            agent_task_prompt(
+                project,
+                run,
+                agent_run,
+                self._assignment(agent_run),
+                conversation_history,
+            ),
+        )
         messages: tuple[ModelMessage, ...] = (system_message, task_message)
         for tool_round in range(MAX_TOOL_ROUNDS + 1):
             response = self._model_gateway.complete(
@@ -679,15 +689,19 @@ class WorkerService:
         for child in child_runs:
             if child.result_artifact_id:
                 child_outputs.append(
-                    f"## {child.definition.name}\n"
+                    f"Subagent message from {child.definition.name}:\n"
                     f"{self._artifacts.get_text(child.result_artifact_id)}"
                 )
+        conversation_history = self._project_orchestrator_entries(project_id)
         request = ModelRequest(
             profile=ModelProfile.REASONING,
             session_id=f"{run_id}:{parent.id}:summary",
             messages=(
                 ModelMessage("system", agent_system_prompt("orchestrator")),
-                ModelMessage("user", orchestrator_summary_prompt(project, run, child_outputs)),
+                ModelMessage(
+                    "user",
+                    orchestrator_summary_prompt(project, run, child_outputs, conversation_history),
+                ),
             ),
             max_output_tokens=700,
         )

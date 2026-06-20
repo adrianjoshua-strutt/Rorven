@@ -291,6 +291,61 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual("user", second_messages[6].role)
         self.assertEqual("what about now?", second_messages[6].content)
 
+    def test_child_and_summary_requests_receive_project_conversation_history(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-child-history-{uuid4()}"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        store = LocalFilePlatformStore(root / "state")
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+            approvals=store,
+            conversations=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"answer","content":"I will remember README.md should say test."}',
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Create the requested file proposal."}]}',
+                '{"action":"final","content":"Proposed README.md with the remembered content."}',
+                "Summary confirms README.md with test content.",
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            approvals=store,
+            conversations=store,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
+        )
+
+        project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
+        projects.submit_task(project.id, 'the file is README.md and it should say "test"')
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        projects.submit_task(project.id, "create the file for me")
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+
+        child_prompt = gateway.requests[2].messages[1].content
+        summary_prompt = gateway.requests[3].messages[1].content
+
+        self.assertIn(f"Workspace root: {workspace.resolve()}", child_prompt)
+        self.assertIn('User: the file is README.md and it should say "test"', child_prompt)
+        self.assertIn('User: the file is README.md and it should say "test"', summary_prompt)
+        self.assertIn("Subagent message from implementer", summary_prompt)
+        project_state = projects.get_project_state(project.id)
+        child_runs = [
+            agent_run for agent_run in project_state.agent_runs
+            if agent_run.parent_agent_run_id is not None
+        ]
+        self.assertEqual(1, len(child_runs))
+
     def test_child_agent_uses_brokered_read_only_workspace_tool(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-tools-{uuid4()}"
         workspace = root / "workspace"

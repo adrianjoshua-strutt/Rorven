@@ -1,5 +1,5 @@
 import { AgentRun, Project, RunState } from "../api";
-import { AgentWorkEntry, ChatMessage, SubagentWorkSummary } from "../types";
+import { AgentWorkEntry, ChatMessage } from "../types";
 import { isDone } from "./status";
 
 export function buildProjectChat(
@@ -12,34 +12,6 @@ export function buildProjectChat(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
   const rootTranscript = persisted.filter(isRootChatEntry);
-  const runs = [...(project.runs ?? [])].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-  );
-  if (runs.length > 0) {
-    const messages: ChatMessage[] = [];
-    for (const projectRun of runs) {
-      const entriesForRun = rootTranscript.filter((entry) => entry.run_id === projectRun.id);
-      const userEntry = entriesForRun.find((entry) => entry.role === "user" && entry.title === "You");
-      messages.push({
-        id: userEntry?.id ?? `${projectRun.id}-user`,
-        side: "user",
-        title: "You",
-        body: cleanChatBody(userEntry?.body ?? projectRun.command),
-        time: userEntry?.created_at ?? projectRun.created_at,
-      });
-      for (const entry of entriesForRun.filter((candidate) => candidate.role === "assistant")) {
-        messages.push({
-          id: entry.id,
-          side: "orchestrator",
-          title: entry.title,
-          body: cleanChatBody(entry.body),
-          time: entry.created_at,
-        });
-      }
-    }
-    appendSelectedRunPlaceholder(messages, run, subagents, rootTranscript);
-    return messages;
-  }
   const messages = rootTranscript.map((entry): ChatMessage => ({
     id: entry.id,
     side: entry.role === "user" ? "user" : "orchestrator",
@@ -47,8 +19,25 @@ export function buildProjectChat(
     body: cleanChatBody(entry.body),
     time: entry.created_at,
   }));
-  appendSelectedRunPlaceholder(messages, run, subagents, rootTranscript);
-  return messages;
+
+  if (!messages.length) {
+    for (const projectRun of [...(project.runs ?? [])]) {
+      messages.push({
+        id: `${projectRun.id}-user`,
+        side: "user",
+        title: "You",
+        body: cleanChatBody(projectRun.command),
+        time: projectRun.created_at,
+      });
+    }
+  }
+
+  messages.push(...buildSubagentTimeline(persisted, subagents));
+  const selectedRunSubagents = run
+    ? subagents.filter((agent) => agent.run_id === run.id)
+    : [];
+  appendSelectedRunPlaceholder(messages, run, selectedRunSubagents, rootTranscript);
+  return messages.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 }
 
 function isRootChatEntry(entry: { role: string; title: string }): boolean {
@@ -102,24 +91,53 @@ function appendSelectedRunPlaceholder(
   });
 }
 
-export function buildSubagentSummaries(run: RunState | null, subagents: AgentRun[]): SubagentWorkSummary[] {
-  if (!run || !subagents.length) return [];
-  return subagents.map((agent) => {
-    const entries = buildAgentWork(agent, run);
-    const usefulEntry =
-      [...entries].reverse().find((entry) => entry.side === "agent" && entry.body.trim()) ??
-      [...entries].reverse().find((entry) => entry.side === "tool" && entry.body.trim()) ??
-      entries[entries.length - 1];
-    const approvals = run.approvals.filter((approval) => approval.agent_run_id === agent.id);
-    return {
-      id: agent.id,
-      title: agent.definition.name,
+function buildSubagentTimeline(
+  projectEntries: { agent_run_id: string | null; role: string; title: string; body: string; created_at: string }[],
+  subagents: AgentRun[],
+): ChatMessage[] {
+  if (!subagents.length) return [];
+  const messages: ChatMessage[] = [];
+  for (const agent of subagents) {
+    const entries = projectEntries
+      .filter((entry) => entry.agent_run_id === agent.id)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const assignment = entries.find((entry) => entry.role === "user");
+    messages.push({
+      id: `${agent.id}-started`,
+      side: "orchestrator",
+      title: `${agent.definition.name} started`,
+      body: compactSummary(
+        assignment?.body ||
+          `${agent.definition.name} was started by the project orchestrator for this request.`,
+      ),
+      time: assignment?.created_at ?? agent.created_at,
       status: agent.status,
-      summary: compactSummary(usefulEntry?.body ?? "No subagent output recorded yet."),
-      detailCount: entries.length,
-      approvalCount: approvals.length,
-    };
-  });
+      kind: "subagent",
+      agentId: agent.id,
+      actionLabel: "Open work log",
+    });
+
+    if (!isDone(agent.status)) {
+      continue;
+    }
+
+    const usefulEntry =
+      [...entries].reverse().find((entry) => entry.role === "assistant" && entry.body.trim()) ??
+      [...entries].reverse().find((entry) => entry.role === "tool" && entry.body.trim()) ??
+      entries[entries.length - 1];
+    messages.push({
+      id: `${agent.id}-finished`,
+      side: "orchestrator",
+      title: `${agent.definition.name} finished`,
+      body: compactSummary(usefulEntry?.body ?? `${agent.definition.name} finished without recorded output.`),
+      time: usefulEntry?.created_at ?? assignment?.created_at ?? agent.created_at,
+      status: agent.status,
+      kind: "subagent",
+      agentId: agent.id,
+      actionLabel: "Review output",
+    });
+  }
+  return messages;
 }
 
 export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWorkEntry[] {

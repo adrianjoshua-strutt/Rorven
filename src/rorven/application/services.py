@@ -47,6 +47,8 @@ from rorven.domain import (
 class ProjectState:
     project: Project
     runs: Sequence[Run]
+    agent_runs: Sequence[AgentRun]
+    tasks: Sequence[Task]
     conversation_entries: Sequence[ConversationEntry]
 
 
@@ -119,9 +121,17 @@ class ProjectService:
         return project
 
     def get_project_state(self, project_id: str) -> ProjectState:
+        runs = self._runs.list_runs(project_id)
+        agent_runs: list[AgentRun] = []
+        tasks: list[Task] = []
+        for run in runs:
+            agent_runs.extend(self._runs.get_run_tree(project_id, run.id))
+            tasks.extend(self._tasks.list_for_run(run.id))
         return ProjectState(
             project=self._runs.get_project(project_id),
-            runs=self._runs.list_runs(project_id),
+            runs=runs,
+            agent_runs=agent_runs,
+            tasks=tasks,
             conversation_entries=self._conversations.list_conversation_for_project(project_id),
         )
 

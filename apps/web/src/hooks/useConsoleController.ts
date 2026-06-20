@@ -54,9 +54,11 @@ export function useConsoleController() {
   const subagents = useMemo(
     () =>
       selectedScope === "project"
-        ? selectedRun?.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null) ?? []
+        ? selectedProject?.agent_runs?.filter((agentRun) => agentRun.parent_agent_run_id !== null) ??
+          selectedRun?.agent_runs.filter((agentRun) => agentRun.parent_agent_run_id !== null) ??
+          []
         : [],
-    [selectedScope, selectedRun],
+    [selectedProject?.agent_runs, selectedRun, selectedScope],
   );
 
   const activityCards = useMemo<ActivityCard[]>(() => {
@@ -80,7 +82,9 @@ export function useConsoleController() {
   const finishedSubagents = activityCards.filter((agent) => isDone(agent.status));
   const inspectedProjectAgent =
     inspectedAgent?.scope === "project"
-      ? subagents.find((agent) => agent.id === inspectedAgent.id) ?? null
+      ? subagents.find((agent) => agent.id === inspectedAgent.id) ??
+        selectedRun?.agent_runs.find((agent) => agent.id === inspectedAgent.id) ??
+        null
       : null;
   const inspectedRootAgent =
     inspectedAgent?.scope === "root"
@@ -268,7 +272,28 @@ export function useConsoleController() {
   }
 
   function inspectActivity(agent: ActivityCard) {
-    setInspectedAgent({ scope: selectedScope === "root" ? "root" : "project", id: agent.id });
+    if (selectedScope === "root") {
+      setInspectedAgent({ scope: "root", id: agent.id });
+      return;
+    }
+    void inspectProjectAgent(agent.id);
+  }
+
+  async function inspectProjectAgent(agentId: string) {
+    const agent = subagents.find((candidate) => candidate.id === agentId);
+    if (!agent || !selectedProjectId) {
+      setInspectedAgent({ scope: "project", id: agentId });
+      return;
+    }
+    if (selectedRun?.id !== agent.run_id) {
+      try {
+        setSelectedRun(await getRun(selectedProjectId, agent.run_id));
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to load subagent run");
+        return;
+      }
+    }
+    setInspectedAgent({ scope: "project", id: agentId });
   }
 
   useEffect(() => {
@@ -309,6 +334,7 @@ export function useConsoleController() {
     handleApprovalDecision,
     rootIsPending: rootProject.isPending,
     inspectActivity,
+    inspectProjectAgent,
     inspectedProjectAgent,
     inspectedRootAgent,
     loadSettings,

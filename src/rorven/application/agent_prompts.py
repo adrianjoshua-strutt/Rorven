@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from rorven.application.tools import agent_tool_contract
-from rorven.domain import AgentRun, Project, Run
+from rorven.domain import AgentRun, ConversationEntry, ConversationRole, Project, Run
 
 
 def agent_system_prompt(agent_name: str) -> str:
@@ -29,7 +29,13 @@ def agent_system_prompt(agent_name: str) -> str:
     )
 
 
-def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun, assignment: str | None = None) -> str:
+def agent_task_prompt(
+    project: Project,
+    run: Run,
+    agent_run: AgentRun,
+    assignment: str | None = None,
+    conversation_history: Sequence[ConversationEntry] = (),
+) -> str:
     task_text = assignment or run.command
     return (
         f"Project: {project.name}\n"
@@ -40,19 +46,44 @@ def agent_task_prompt(project: Project, run: Run, agent_run: AgentRun, assignmen
         f"Model profile: {agent_run.definition.model_profile.value}\n\n"
         f"User request:\n{run.command}\n\n"
         f"Assigned task:\n{task_text}\n\n"
+        f"{_conversation_history_section(conversation_history)}\n\n"
         f"{agent_tool_contract()}\n\n"
         "Return useful work product for the project orchestrator. Keep it structured and "
-        "specific. Separate proven tool observations from recommendations."
+        "specific. Use the project conversation history to resolve references such as "
+        "'the file', 'that folder', or 'what I told you'. All workspace tool paths are "
+        "relative to the workspace root above unless the user gave a path inside that "
+        "root. Separate proven tool observations from recommendations."
     )
 
 
-def orchestrator_summary_prompt(project: Project, run: Run, child_outputs: Sequence[str]) -> str:
+def orchestrator_summary_prompt(
+    project: Project,
+    run: Run,
+    child_outputs: Sequence[str],
+    conversation_history: Sequence[ConversationEntry] = (),
+) -> str:
     return (
         f"Project: {project.name}\n"
         f"Workspace: {project.workspace.workspace_root}\n"
         f"User request: {run.command}\n\n"
+        f"{_conversation_history_section(conversation_history)}\n\n"
         "Summarize the completed subagent work into a concise project orchestrator "
-        "response. Mention concrete next steps and avoid claiming tools were used if "
-        "the child output did not prove it.\n\n"
+        "response. Treat the child outputs below as returned subagent messages. Use "
+        "the project conversation history to resolve missing-looking details before "
+        "asking the user again. Mention concrete next steps and avoid claiming tools "
+        "were used if the child output did not prove it.\n\n"
         + "\n\n".join(child_outputs)
     )
+
+
+def _conversation_history_section(entries: Sequence[ConversationEntry]) -> str:
+    lines = [
+        "Project conversation history:",
+    ]
+    if not entries:
+        lines.append("- No prior project chat turns are available.")
+        return "\n".join(lines)
+    for entry in entries:
+        speaker = "User" if entry.role == ConversationRole.USER else "Project orchestrator"
+        lines.append(f"{speaker}: {entry.body.strip()}")
+    return "\n".join(lines)
