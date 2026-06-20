@@ -1,7 +1,6 @@
 # Validation
 
-Validated implementation commit: pending commit for embedded worker, bounded
-subagent tool loop, and chat-context fixes.
+Validated implementation commit: `4cb3b9a`
 
 ## Evidence
 
