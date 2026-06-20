@@ -30,20 +30,24 @@ not replace the earlier visible command.
 
 ## 2026-06-20 follow-up evidence
 
+Validated implementation commit: `191dc10cbd7ea91d8632d7b95f8903696d970c8f`
+
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Result: 46 tests passed.
+Result: 48 tests passed.
 
 Coverage includes:
 
 - API lifespan embedded worker completes a queued project run.
 - API lifespan embedded worker runs a dispatched implementer subagent through
   read-file and propose-write tools, then approval applies the change.
-- Worker supplies recent project chat history to the project orchestrator as
-  prior `ModelMessage` turns before the current user request.
+- Worker frames recent project chat history as explicit begin/end-bounded prior
+  `ModelMessage` turns before the current user request.
+- Root project chat frames prior root messages as explicit history before the
+  current user request.
 - Child agents can use multiple bounded tool rounds.
 
 ```powershell

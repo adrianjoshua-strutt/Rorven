@@ -71,3 +71,7 @@ risks:
     title: Embedded API worker and external worker can both lease tasks
     severity: medium
     mitigation: use durable task leases through the shared task queue port; disable the API supervisor with RORVEN_API_EMBEDDED_WORKER=0 when running dedicated workers
+  - id: R-019
+    title: Orchestrators lose follow-up context when history framing is ambiguous
+    severity: high
+    mitigation: frame root and project model requests with explicit prior conversation-history sections and regression tests for follow-up turns
