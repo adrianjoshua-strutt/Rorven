@@ -347,6 +347,9 @@ class WorkerService:
             return
 
         content = _format_model_response(response, decision.answer or "")
+        self._answer_root_task(task, root, content)
+
+    def _answer_root_task(self, task: Task, root: AgentRun, content: str) -> None:
         artifact = self._put_agent_result(root, content)
         self._append_conversation(root, ConversationRole.ASSISTANT, "Project orchestrator", content, artifact.id)
         answered_root = root.transition(RunStatus.COMPLETED, artifact.id)
@@ -377,7 +380,7 @@ class WorkerService:
     def _request_orchestrator_decision(self, root: AgentRun) -> ModelResponse:
         run = self._runs.get_run(root.project_id, root.run_id)
         project = self._runs.get_project(root.project_id)
-        conversation_context = self._project_orchestrator_context(root.project_id)
+        conversation_history = self._project_orchestrator_entries(root.project_id, exclude_run_id=run.id)
         request = ModelRequest(
             profile=root.definition.model_profile,
             session_id=f"{root.run_id}:{root.id}:dispatch",
@@ -392,33 +395,34 @@ class WorkerService:
                             f"Allowed root: {project.workspace.allowed_root}",
                             f"Run id: {run.id}",
                             "",
-                            "Recent project conversation:",
-                            conversation_context,
-                            "",
-                            "User request:",
-                            run.command,
+                            "Use the following chat history messages as real context.",
                         ]
                     ),
                 ),
+                *(
+                    ModelMessage(_model_role_for_entry(entry), entry.body.strip())
+                    for entry in conversation_history
+                    if entry.body.strip()
+                ),
+                ModelMessage("user", run.command),
             ),
             max_output_tokens=700,
         )
         return self._model_gateway.complete(request)
 
-    def _project_orchestrator_context(self, project_id: str) -> str:
+    def _project_orchestrator_entries(
+        self,
+        project_id: str,
+        *,
+        exclude_run_id: str | None = None,
+    ) -> list[ConversationEntry]:
         entries = [
             entry
             for entry in self._conversations.list_conversation_for_project(project_id)
             if _is_project_orchestrator_entry(entry)
+            and (exclude_run_id is None or entry.run_id != exclude_run_id)
         ]
-        if not entries:
-            return "(none)"
-        recent_entries = entries[-MAX_ORCHESTRATOR_HISTORY_ENTRIES:]
-        return "\n".join(
-            f"{_conversation_speaker(entry)}: {entry.body.strip()}"
-            for entry in recent_entries
-            if entry.body.strip()
-        )
+        return entries[-MAX_ORCHESTRATOR_HISTORY_ENTRIES:]
 
     def _persist_child_dispatch(
         self,
@@ -749,6 +753,12 @@ def _conversation_speaker(entry: ConversationEntry) -> str:
     if entry.role == ConversationRole.USER:
         return "User"
     return "Project orchestrator"
+
+
+def _model_role_for_entry(entry: ConversationEntry) -> str:
+    if entry.role == ConversationRole.USER:
+        return "user"
+    return "assistant"
 
 
 def _dispatch_summary(decision: OrchestratorDecision) -> str:

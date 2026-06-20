@@ -192,7 +192,7 @@ class LocalFileStoreTests(unittest.TestCase):
         artifact_text = "\n".join(failed_state.artifact_contents.values())
         self.assertIn("orchestrator response was not valid JSON", artifact_text)
 
-    def test_orchestrator_receives_recent_project_conversation_context(self) -> None:
+    def test_orchestrator_receives_project_history_as_model_messages(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-history-{uuid4()}"
         root.mkdir(parents=True, exist_ok=True)
         store = LocalFilePlatformStore(root)
@@ -227,11 +227,17 @@ class LocalFileStoreTests(unittest.TestCase):
         projects.submit_task(project.id, "just create the file I told you to")
         self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
 
-        second_prompt = gateway.requests[1].messages[1].content
+        second_messages = gateway.requests[1].messages
 
-        self.assertIn('User: create README.md that says "test"', second_prompt)
-        self.assertIn("Project orchestrator: I can propose README.md with test after approval.", second_prompt)
-        self.assertIn("User request:\njust create the file I told you to", second_prompt)
+        self.assertEqual("system", second_messages[0].role)
+        self.assertEqual("user", second_messages[1].role)
+        self.assertIn("Use the following chat history messages as real context.", second_messages[1].content)
+        self.assertEqual("user", second_messages[2].role)
+        self.assertEqual('create README.md that says "test"', second_messages[2].content)
+        self.assertEqual("assistant", second_messages[3].role)
+        self.assertEqual("I can propose README.md with test after approval.", second_messages[3].content)
+        self.assertEqual("user", second_messages[4].role)
+        self.assertEqual("just create the file I told you to", second_messages[4].content)
 
     def test_child_agent_uses_brokered_read_only_workspace_tool(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-tools-{uuid4()}"
