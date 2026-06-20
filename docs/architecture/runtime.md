@@ -22,6 +22,13 @@ records and tasks, marks the parent run waiting, then lets workers execute the
 child tasks. When all child runs complete, the root orchestrator summarizes
 their artifacts and completes the run.
 
+Child-agent and summary model requests also receive the bounded project
+conversation history. This keeps details supplied in earlier user turns, such as
+file names or target content, available after the orchestrator has dispatched
+work. Project snapshots expose project-level child agent runs and transcript
+entries so the console can render subagent start and finish events in the main
+chat timeline while still allowing detailed inspection of each subagent run.
+
 The platform only creates child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
 
 An agent run contains:

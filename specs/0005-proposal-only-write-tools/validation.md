@@ -57,9 +57,48 @@ npm.cmd run build
 
 Result: build passed.
 
-Playwright browser validation was attempted twice during live debugging and was
-interrupted by the operator before completion; do not treat the current follow-up
-slice as browser-validated until it is rerun.
+## 2026-06-20 timeline/context follow-up evidence
+
+Validated implementation commit: `286308ea9294b46ca4dd32fd2d22858d75121f7b`
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+Result: 49 tests passed.
+
+Coverage includes:
+
+- Child-agent prompts receive project conversation history and the actual
+  workspace root.
+- Orchestrator summary prompts receive project conversation history and returned
+  subagent messages.
+- Project snapshots expose child agent runs so the console can show project-wide
+  subagent work instead of only the selected run.
+
+```powershell
+cd apps/web
+npx.cmd tsc -b
+```
+
+Result: TypeScript compile passed.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: build passed. The sandboxed attempt failed with `spawn EPERM` from
+esbuild; the same build passed outside the sandbox.
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5182'
+npm.cmd run test:e2e
+```
+
+Result: 2 Playwright tests passed across desktop and mobile Chromium against a
+built static app and local API with the embedded worker disabled.
 
 ## Remaining Limitations
 
@@ -67,5 +106,3 @@ slice as browser-validated until it is rerun.
 - Approved local text-file writes do not yet have full idempotency keys or
   interrupted-apply recovery tests.
 - No shell, git, browser, network, or external service tools.
-- Follow-up browser validation for the embedded worker/chat UI slice is still
-  outstanding after interrupted Playwright runs.

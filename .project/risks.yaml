@@ -75,3 +75,7 @@ risks:
     title: Orchestrators lose follow-up context when history framing is ambiguous
     severity: high
     mitigation: frame root and project model requests with explicit prior conversation-history sections and regression tests for follow-up turns
+  - id: R-020
+    title: Subagent work appears detached from the main project conversation
+    severity: high
+    mitigation: expose project-level agent runs and render subagent start and finish entries inside the timestamped project chat timeline
