@@ -156,7 +156,7 @@ Coverage includes:
 
 ## 2026-06-21 console routing/settings follow-up evidence
 
-Validated implementation commit: `57c11ddec7d0345ff304657627f324867bada207`
+Validated implementation commit: `e6dee8a7190abc51c4a1adc6e70d91c2875191fe`
 
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
