@@ -131,7 +131,9 @@ def register_routes(
             state = services.projects.get_project_state(project_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return {"project": project_state_to_api(state)}
+        payload = project_state_to_api(state)
+        payload.update(_project_activity_metadata(state))
+        return {"project": payload}
 
     @app.post("/projects/{project_id}/runs", status_code=202)
     def submit_run(project_id: str, request: SubmitRunRequest) -> dict[str, Any]:

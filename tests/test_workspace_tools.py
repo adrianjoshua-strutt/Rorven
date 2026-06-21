@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from rorven.adapters.tools import LocalWorkspaceToolBroker
-from rorven.application.tools import ToolRequest, WorkspaceReadPolicy
+from rorven.application.tools import ToolRequest, WorkspaceReadPolicy, parse_agent_tool_instruction
 from rorven.domain import AgentDefinitionRef, AgentRun, ModelProfile, Project, WorkspaceBinding
 
 
@@ -53,6 +55,14 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertTrue(diagnostic.allowed)
         self.assertFalse(network_fetch.allowed)
         self.assertFalse(destructive.allowed)
+
+    def test_agent_final_protocol_handles_model_wrappers(self) -> None:
+        instruction = parse_agent_tool_instruction(
+            '<think>I should answer cleanly.</think>\n{"action":"final","content":"Ping completed."}'
+        )
+
+        self.assertFalse(instruction.requests_tools)
+        self.assertEqual("Ping completed.", instruction.final_content)
 
     def test_local_workspace_broker_reads_text_inside_workspace(self) -> None:
         project, child, _root = _project_and_agents()
@@ -148,6 +158,24 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertIn("README.md", result.content)
         self.assertEqual(".", result.metadata["cwd"])
         self.assertEqual(False, result.metadata["timed_out"])
+
+    def test_shell_command_handles_missing_output_streams(self) -> None:
+        project, child, _root = _project_and_agents()
+        Path(project.workspace.workspace_root).mkdir(parents=True, exist_ok=True)
+
+        with patch(
+            "rorven.adapters.tools.local_workspace.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=["shell"], returncode=0, stdout=None, stderr=None),
+        ):
+            result = LocalWorkspaceToolBroker().execute(
+                project,
+                child,
+                ToolRequest("workspace.run_shell_command", {"command": "ping google.com"}),
+            )
+
+        self.assertIn("Return code: 0", result.content)
+        self.assertEqual(0, result.metadata["stdout_bytes"])
+        self.assertEqual(0, result.metadata["stderr_bytes"])
 
 
 def _project_and_agents() -> tuple[Project, AgentRun, AgentRun]:

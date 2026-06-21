@@ -941,6 +941,9 @@ class WorkerService:
         )
 
 def _format_model_response(_response: ModelResponse, content: str) -> str:
+    instruction = parse_agent_tool_instruction(content)
+    if instruction.final_content:
+        return instruction.final_content.strip()
     return content.strip()
 
 
@@ -1044,6 +1047,8 @@ def _orchestrator_work_log_context(entries: Sequence[ConversationEntry]) -> str:
     lines = [
         "Project work-log facts from prior subagent/tool/approval entries, oldest to newest.",
         "Use these facts to answer follow-up questions about files, approvals, and completed work.",
+        "These are historical facts, not evidence that the current request has been retried.",
+        "If the current user asks to try again, retry, rerun, check again, or run the same command again, dispatch fresh subagent work instead of answering from this log.",
     ]
     for entry in entries:
         body = " ".join(entry.body.strip().split())

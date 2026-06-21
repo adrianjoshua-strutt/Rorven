@@ -258,6 +258,19 @@ def _has_sensitive_path_marker(path: str) -> bool:
 
 
 def _try_loads_json_object(content: str) -> dict[str, Any] | None:
+    trimmed = _strip_common_model_wrappers(content)
+    try:
+        payload = json.loads(trimmed)
+    except json.JSONDecodeError:
+        payload = _loads_embedded_json_object(trimmed)
+        if payload is None:
+            return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _strip_common_model_wrappers(content: str) -> str:
     trimmed = content.strip()
     if trimmed.startswith("```"):
         lines = trimmed.splitlines()
@@ -266,13 +279,41 @@ def _try_loads_json_object(content: str) -> dict[str, Any] | None:
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         trimmed = "\n".join(lines).strip()
-    try:
-        payload = json.loads(trimmed)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return payload
+    return re.sub(r"<think>.*?</think>", "", trimmed, flags=re.IGNORECASE | re.DOTALL).strip()
+
+
+def _loads_embedded_json_object(content: str) -> dict[str, Any] | None:
+    start = content.find("{")
+    while start != -1:
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(content)):
+            char = content[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        payload = json.loads(content[start : index + 1])
+                    except json.JSONDecodeError:
+                        break
+                    if isinstance(payload, dict) and payload.get("action") in {"final", "tool_calls"}:
+                        return payload
+                    break
+        start = content.find("{", start + 1)
+    return None
 
 
 def _required_string(payload: dict[str, Any], key: str) -> str:

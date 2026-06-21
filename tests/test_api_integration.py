@@ -90,6 +90,40 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("project result", state_payload["artifacts"][0]["content"])
         self.assertTrue((data_dir / "state.json").exists())
 
+    def test_project_detail_preserves_activity_sort_metadata(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"api-project-activity-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        project_response = client.post(
+            "/projects",
+            json={
+                "name": "Sortable Project",
+                "allowed_root": "D:/workspaces",
+                "workspace_root": "D:/workspaces/sortable-project",
+            },
+        )
+        self.assertEqual(201, project_response.status_code)
+        project_id = project_response.json()["project"]["id"]
+        run_response = client.post(
+            f"/projects/{project_id}/runs",
+            json={"command": "latest user message"},
+        )
+        self.assertEqual(202, run_response.status_code)
+
+        list_project = client.get("/projects").json()["projects"][0]
+        detail_project = client.get(f"/projects/{project_id}").json()["project"]
+
+        self.assertEqual(list_project["last_user_message_at"], detail_project["last_user_message_at"])
+        self.assertEqual(list_project["last_activity_at"], detail_project["last_activity_at"])
+
     def test_embedded_worker_completes_project_run_from_api_lifespan(self) -> None:
         data_dir = Path("test-output") / "tests" / f"api-embedded-worker-{uuid4()}"
         data_dir.mkdir(parents=True, exist_ok=True)

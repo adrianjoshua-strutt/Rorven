@@ -41,10 +41,11 @@ export function useConsoleController() {
   const rootProject = useRootProjectController();
   const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsSnapshot | null>(null);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogEntry[]>([]);
-  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("latest_activity");
+  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("last_user_message");
   const [seenProjectActivity, setSeenProjectActivity] = useState<Record<string, string>>(() =>
     readSeenProjectActivity(),
   );
+  const [hasSeenProjectBaseline, setHasSeenProjectBaseline] = useState(() => hasStoredSeenProjectActivity());
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [settingsLoadState, setSettingsLoadState] = useState<LoadState>("idle");
@@ -129,6 +130,7 @@ export function useConsoleController() {
     try {
       const [nextProjects, nextSettings] = await Promise.all([listProjects(), getSettings()]);
       setProjects(nextProjects);
+      seedSeenProjectActivityBaseline(nextProjects);
       setSettingsSnapshot(nextSettings);
       const projectId = selectedScope === "project" ? selectedProjectId : null;
       if (projectId) {
@@ -375,6 +377,7 @@ export function useConsoleController() {
     Promise.all([listProjects(), getSettings()])
       .then(([nextProjects, nextSettings]) => {
         setProjects(nextProjects);
+        seedSeenProjectActivityBaseline(nextProjects);
         setSettingsSnapshot(nextSettings);
         setLoadState("idle");
         void applyRouteFromHash(nextProjects);
@@ -446,6 +449,19 @@ export function useConsoleController() {
       window.localStorage.setItem("rorven.seenProjectActivity", JSON.stringify(next));
       return next;
     });
+  }
+
+  function seedSeenProjectActivityBaseline(nextProjects: Project[]) {
+    if (hasSeenProjectBaseline) return;
+    const next: Record<string, string> = {};
+    for (const project of nextProjects) {
+      if (project.last_activity_at) {
+        next[project.id] = project.last_activity_at;
+      }
+    }
+    window.localStorage.setItem("rorven.seenProjectActivity", JSON.stringify(next));
+    setSeenProjectActivity(next);
+    setHasSeenProjectBaseline(true);
   }
 
   return {
@@ -533,4 +549,8 @@ function readSeenProjectActivity(): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function hasStoredSeenProjectActivity(): boolean {
+  return window.localStorage.getItem("rorven.seenProjectActivity") !== null;
 }

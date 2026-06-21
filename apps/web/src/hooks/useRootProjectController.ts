@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { getRootDashboard, submitRootMessage } from "../api";
 import { ChatMessage, RootAgentActivity } from "../types";
+import { cleanChatBody } from "../utils/chat";
 
 export function useRootProjectController() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -18,7 +19,7 @@ export function useRootProjectController() {
           id: entry.id,
           side: entry.side,
           title: entry.title,
-          body: entry.body,
+          body: cleanChatBody(entry.body),
           time: entry.time,
           status: entry.status,
         })),
@@ -68,7 +69,7 @@ export function useRootProjectController() {
           id: entry.id,
           side: entry.side,
           title: entry.title,
-          body: entry.body,
+          body: cleanChatBody(entry.body),
           time: entry.time,
           status: entry.status,
         })),
@@ -95,7 +96,7 @@ export function useRootProjectController() {
             id: entry.id,
             side: entry.side,
             title: entry.title,
-            body: entry.body,
+            body: cleanChatBody(entry.body),
             time: entry.time,
             status: entry.status,
           })),

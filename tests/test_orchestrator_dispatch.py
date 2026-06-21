@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from rorven.application.dispatching import parse_orchestrator_decision
+from rorven.application.dispatching import orchestrator_dispatch_contract, parse_orchestrator_decision
 
 
 class OrchestratorDispatchTests(unittest.TestCase):
@@ -36,6 +36,12 @@ class OrchestratorDispatchTests(unittest.TestCase):
             parse_orchestrator_decision(
                 '{"action":"dispatch","subagents":[{"name":"filesystem","task":"Edit files."}]}'
             )
+
+    def test_contract_requires_fresh_dispatch_for_retries(self) -> None:
+        contract = orchestrator_dispatch_contract()
+
+        self.assertIn("try again", contract)
+        self.assertIn("dispatch a new subagent", contract)
 
 
 if __name__ == "__main__":

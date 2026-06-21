@@ -2,10 +2,12 @@ import { FormEvent, useEffect, useRef } from "react";
 import { AgentRun, ApprovalRecord, Project, RunState } from "../../api";
 import { ChatMessage, LoadState } from "../../types";
 import { ChatBubble } from "../chat/ChatBubble";
+import { ChatThinkingBubble } from "../chat/ChatThinkingBubble";
 import { Composer } from "../chat/Composer";
 import { ConnectionState } from "../status/ConnectionState";
 import { MessageSquare } from "lucide-react";
 import { normalizeDisplayPath } from "../../utils/projects";
+import { isDone } from "../../utils/status";
 
 export function ProjectChatView({
   chatMessages,
@@ -35,6 +37,7 @@ export function ProjectChatView({
   subagents: AgentRun[];
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const isRunActive = run ? !isDone(run.status) : false;
 
   useEffect(() => {
     const list = listRef.current;
@@ -71,6 +74,7 @@ export function ProjectChatView({
             <span>Subagents run in the background and appear in the activity rail.</span>
           </div>
         )}
+        {isRunActive ? <ChatThinkingBubble /> : null}
       </div>
 
       <Composer

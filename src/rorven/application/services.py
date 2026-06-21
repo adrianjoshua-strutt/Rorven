@@ -466,7 +466,6 @@ class RootService:
             "title": "Root orchestrator",
             "body": body,
             "time": _current_iso(),
-            "status": response.provider,
         }
         self._root_messages.append_root_message(assistant_message)
         return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
@@ -506,7 +505,7 @@ class RootService:
             "Create a new project for this repository.",
         }
         return [
-            message
+            {key: value for key, value in message.items() if key != "status"}
             for message in self._root_messages.list_root_messages()
             if str(message.get("body", "")).strip() not in hidden_seed_bodies
         ]

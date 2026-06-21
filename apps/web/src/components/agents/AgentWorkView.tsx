@@ -2,6 +2,7 @@ import { Button, TextInput } from "@mantine/core";
 import { Bot, Check, ChevronLeft, User, X } from "lucide-react";
 import { AgentRun, ApprovalRecord, RunState } from "../../api";
 import { buildAgentWork } from "../../utils/chat";
+import { isDone } from "../../utils/status";
 import { StatusPill } from "../status/StatusPill";
 
 export function AgentWorkView({
@@ -92,7 +93,14 @@ export function AgentWorkView({
         </section>
       ) : null}
 
-      <InterruptBar placeholder="Interrupt or add context for this subagent" />
+      <InterruptBar
+        disabled={isDone(agent.status)}
+        placeholder={
+          isDone(agent.status)
+            ? "Completed subagents cannot be interrupted"
+            : "Interrupt or add context for this subagent"
+        }
+      />
     </section>
   );
 }
@@ -131,12 +139,12 @@ export function MetaTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function InterruptBar({ placeholder }: { placeholder: string }) {
+export function InterruptBar({ disabled = false, placeholder }: { disabled?: boolean; placeholder: string }) {
   return (
     <div className="agent-interrupt">
-      <TextInput placeholder={placeholder} />
-      <Button className="secondary-button" type="button" variant="default">
-        Interrupt
+      <TextInput disabled={disabled} placeholder={placeholder} />
+      <Button className="secondary-button" disabled={disabled} type="button" variant="default">
+        {disabled ? "Finished" : "Interrupt"}
       </Button>
     </div>
   );

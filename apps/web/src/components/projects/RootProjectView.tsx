@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef } from "react";
 import { ChatMessage } from "../../types";
 import { ChatBubble } from "../chat/ChatBubble";
+import { ChatThinkingBubble } from "../chat/ChatThinkingBubble";
 import { Composer } from "../chat/Composer";
 import { ConnectionState } from "../status/ConnectionState";
 
@@ -63,16 +64,7 @@ export function RootProjectView({
         {messages.map((item) => (
           <ChatBubble item={item} key={item.id} />
         ))}
-        {isPending ? (
-          <div className="chat-bubble orchestrator thinking-bubble">
-            <div className="bubble-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
-            </div>
-            <div className="bubble-body thinking-body">
-              <span className="thinking-dots"><span>·</span><span>·</span><span>·</span></span>
-            </div>
-          </div>
-        ) : null}
+        {isPending ? <ChatThinkingBubble title="Root orchestrator" /> : null}
       </div>
 
       <Composer

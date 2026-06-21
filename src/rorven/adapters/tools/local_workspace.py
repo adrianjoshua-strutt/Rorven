@@ -215,13 +215,13 @@ class LocalWorkspaceToolBroker:
                 check=False,
             )
             timed_out = False
-            stdout = completed.stdout
-            stderr = completed.stderr
+            stdout = _command_text(completed.stdout)
+            stderr = _command_text(completed.stderr)
             return_code = completed.returncode
         except subprocess.TimeoutExpired as exc:
             timed_out = True
-            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
-            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            stdout = _command_text(exc.stdout)
+            stderr = _command_text(exc.stderr)
             return_code = None
         output = _format_command_output(command, stdout, stderr, return_code, timed_out)
         return ToolExecutionResult(
@@ -325,6 +325,14 @@ def _format_command_output(
         stderr or "<empty>",
     ]
     return "\n".join(lines)
+
+
+def _command_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return ""
 
 
 def _truncate_output(value: str, max_chars: int = 12_000) -> str:

@@ -204,6 +204,8 @@ class RootDashboardTests(unittest.TestCase):
         self.assertEqual("Hi.", messages[4]["content"])
         self.assertIn("End root conversation history", messages[5]["content"])
         self.assertIn("Current user request: what did I say?", messages[6]["content"])
+        root_messages = client.get("/root").json()["root"]["messages"]
+        self.assertNotIn("status", root_messages[-1])
 
     def test_root_chat_creates_project_under_configured_workspace_base(self) -> None:
         data_dir = Path("test-output") / "tests" / f"root-create-{uuid4()}" / "state"

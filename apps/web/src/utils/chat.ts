@@ -272,6 +272,10 @@ export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWork
 
 export function cleanChatBody(body: string): string {
   const trimmed = body.trim();
+  const protocolContent = extractProtocolFinalContent(trimmed);
+  if (protocolContent) {
+    return cleanChatBody(protocolContent);
+  }
   const withoutModelPrefix = trimmed.replace(/^Model:\s+[^\n]+(?:\n\s*\n)?/, "").trim();
   const withoutMarkdownDecoration = withoutModelPrefix
     .replace(/\*\*/g, "")
@@ -279,6 +283,48 @@ export function cleanChatBody(body: string): string {
     .replace(/`/g, "")
     .replace(/^#{1,6}\s+/gm, "");
   return withoutMarkdownDecoration.trim() || trimmed;
+}
+
+function extractProtocolFinalContent(body: string): string | null {
+  const candidates = [body, stripFencedJson(body), stripThinkBlocks(body)];
+  for (const candidate of candidates) {
+    const parsed = parseProtocolJson(candidate);
+    if (parsed) return parsed;
+  }
+  const embedded = extractEmbeddedProtocolJson(stripThinkBlocks(body));
+  return embedded;
+}
+
+function stripFencedJson(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  const lines = trimmed.split(/\r?\n/);
+  if (lines[0]?.startsWith("```")) lines.shift();
+  if (lines[lines.length - 1]?.startsWith("```")) lines.pop();
+  return lines.join("\n").trim();
+}
+
+function stripThinkBlocks(body: string): string {
+  return body.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
+function parseProtocolJson(body: string): string | null {
+  try {
+    const payload = JSON.parse(body) as { action?: unknown; content?: unknown };
+    return payload.action === "final" && typeof payload.content === "string" ? payload.content : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractEmbeddedProtocolJson(body: string): string | null {
+  const start = body.indexOf("{");
+  if (start < 0) return null;
+  for (let index = body.length; index > start; index -= 1) {
+    const parsed = parseProtocolJson(body.slice(start, index));
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 function compactSummary(body: string): string {

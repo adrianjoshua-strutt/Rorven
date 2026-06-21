@@ -197,3 +197,43 @@ Coverage includes:
   exposes removed status-only tiles such as secret visibility or memory backend.
 - Project selection survives reload, and Shift+Enter submits through the chat
   composer.
+
+## 2026-06-21 agent protocol and project sorting follow-up evidence
+
+Validated implementation commit: pending
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover
+```
+
+Result: 56 tests passed.
+
+Coverage includes:
+
+- `workspace.run_shell_command` tolerates missing stdout/stderr streams instead
+  of failing with `object of type 'NoneType' has no len()`.
+- Subagent final protocol JSON with common model wrappers is normalized to the
+  final content before storing/rendering.
+- Root chat responses no longer expose provider labels such as `openrouter`.
+- Project detail responses preserve the same `last_activity_at` and
+  `last_user_message_at` metadata as the project list, so selecting/polling a
+  project no longer breaks sorting.
+- The orchestrator dispatch contract explicitly requires fresh subagent work
+  for retry requests such as "try again".
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: TypeScript and Vite build passed.
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5186'
+npm.cmd run test:e2e
+```
+
+Result: blocked in this environment. The elevated Playwright run was rejected,
+and the sandboxed run failed while cleaning Playwright state with
+`EPERM: operation not permitted, unlink 'apps/web/test-results/.last-run.json'`.
