@@ -1,6 +1,6 @@
 import { Button, Textarea } from "@mantine/core";
 import { Send } from "lucide-react";
-import { FormEvent } from "react";
+import { FormEvent, KeyboardEvent } from "react";
 
 export function Composer({
   disabled = false,
@@ -15,14 +15,25 @@ export function Composer({
   placeholder: string;
   value: string;
 }) {
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  }
+
   return (
     <form className="composer" onSubmit={onSubmit}>
       <Textarea
+        disabled={disabled}
         className="composer-input"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        autosize={false}
+        autosize
+        minRows={1}
+        maxRows={4}
       />
       <Button
         className="send-button"

@@ -240,8 +240,10 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual("I can propose README.md with test after approval.", second_messages[4].content)
         self.assertEqual("system", second_messages[5].role)
         self.assertIn("End project conversation history", second_messages[5].content)
-        self.assertEqual("user", second_messages[6].role)
-        self.assertEqual("just create the file I told you to", second_messages[6].content)
+        self.assertEqual("system", second_messages[6].role)
+        self.assertIn("Project work-log facts", second_messages[6].content)
+        self.assertEqual("user", second_messages[7].role)
+        self.assertEqual("just create the file I told you to", second_messages[7].content)
 
     def test_orchestrator_keeps_prior_assistant_turns_inside_explicit_history(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-history-boundary-{uuid4()}"
@@ -288,8 +290,10 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertEqual("I do not have access to previous messages.", second_messages[4].content)
         self.assertEqual("system", second_messages[5].role)
         self.assertIn("answer from the transcript above", second_messages[5].content)
-        self.assertEqual("user", second_messages[6].role)
-        self.assertEqual("what about now?", second_messages[6].content)
+        self.assertEqual("system", second_messages[6].role)
+        self.assertIn("Project work-log facts", second_messages[6].content)
+        self.assertEqual("user", second_messages[7].role)
+        self.assertEqual("what about now?", second_messages[7].content)
 
     def test_child_and_summary_requests_receive_project_conversation_history(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-child-history-{uuid4()}"

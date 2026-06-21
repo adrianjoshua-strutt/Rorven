@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalRecord,
+  ModelCatalogEntry,
   Project,
   RunState,
   SettingsSnapshot,
   approveApproval,
   createProject,
+  getModelCatalog,
   getProject,
   getRun,
   getSettings,
@@ -13,6 +15,7 @@ import {
   rejectApproval,
   submitRun,
   updateApprovalPolicy,
+  updateModelProfiles,
   updateProjectDefaults,
 } from "../api";
 import {
@@ -20,10 +23,11 @@ import {
   InspectedAgent,
   LoadState,
   NewProjectDraft,
+  ProjectSortMode,
   SelectedScope,
 } from "../types";
 import { buildProjectChat } from "../utils/chat";
-import { replaceProjectPreservingOrder } from "../utils/projects";
+import { replaceProjectPreservingOrder, sortProjects } from "../utils/projects";
 import { isDone } from "../utils/status";
 import { useRootProjectController } from "./useRootProjectController";
 
@@ -36,6 +40,11 @@ export function useConsoleController() {
   const [inspectedAgent, setInspectedAgent] = useState<InspectedAgent | null>(null);
   const rootProject = useRootProjectController();
   const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsSnapshot | null>(null);
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalogEntry[]>([]);
+  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("latest_activity");
+  const [seenProjectActivity, setSeenProjectActivity] = useState<Record<string, string>>(() =>
+    readSeenProjectActivity(),
+  );
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [settingsLoadState, setSettingsLoadState] = useState<LoadState>("idle");
@@ -51,6 +60,22 @@ export function useConsoleController() {
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+  const sortedProjects = useMemo(
+    () => sortProjects(projects, projectSortMode),
+    [projects, projectSortMode],
+  );
+  const unreadProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const project of projects) {
+      const last = project.last_activity_at;
+      if (!last) continue;
+      const seen = seenProjectActivity[project.id];
+      if ((project.pending_approval_count ?? 0) > 0 || new Date(last) > new Date(seen ?? 0)) {
+        ids.add(project.id);
+      }
+    }
+    return ids;
+  }, [projects, seenProjectActivity]);
 
   const subagents = useMemo(
     () =>
@@ -130,6 +155,14 @@ export function useConsoleController() {
     }
   }
 
+  async function loadModelCatalog() {
+    try {
+      setModelCatalog(await getModelCatalog());
+    } catch {
+      setModelCatalog([]);
+    }
+  }
+
   async function loadProject(
     projectId: string,
     preferredRunId?: string | null,
@@ -153,6 +186,7 @@ export function useConsoleController() {
     } else {
       setSelectedRun(null);
     }
+    markProjectSeen(project);
   }
 
   async function handleCreateProject(event: FormEvent) {
@@ -239,6 +273,18 @@ export function useConsoleController() {
     }
   }
 
+  async function handleUpdateModelProfile(name: string, modelId: string) {
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      setSettingsSnapshot(await updateModelProfiles({ [name]: modelId }));
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update model profile");
+      setSettingsLoadState("error");
+    }
+  }
+
   async function handleApprovalDecision(approval: ApprovalRecord, decision: "approve" | "reject") {
     setError(null);
     try {
@@ -256,6 +302,7 @@ export function useConsoleController() {
   }
 
   function selectRoot() {
+    setRouteHash("#/root");
     projectLoadSequence.current += 1;
     setSelectedScope("root");
     setSelectedProjectId(null);
@@ -264,15 +311,18 @@ export function useConsoleController() {
   }
 
   function selectSettings() {
+    setRouteHash("#/settings");
     projectLoadSequence.current += 1;
     setSelectedScope("settings");
     setSelectedProjectId(null);
     setSelectedRun(null);
     setInspectedAgent(null);
     void loadSettings();
+    void loadModelCatalog();
   }
 
   async function selectProject(projectId: string) {
+    setRouteHash(projectRoute(projectId));
     const loadToken = ++projectLoadSequence.current;
     setSelectedProjectId(projectId);
     setSelectedScope("project");
@@ -298,6 +348,7 @@ export function useConsoleController() {
     const agent = subagents.find((candidate) => candidate.id === agentId);
     if (!agent || !selectedProjectId) {
       setInspectedAgent({ scope: "project", id: agentId });
+      setRouteHash(agentRoute(selectedProjectId, agentId));
       return;
     }
     if (selectedRun?.id !== agent.run_id) {
@@ -309,6 +360,12 @@ export function useConsoleController() {
       }
     }
     setInspectedAgent({ scope: "project", id: agentId });
+    setRouteHash(agentRoute(selectedProjectId, agentId));
+  }
+
+  function closeInspectedAgent() {
+    setInspectedAgent(null);
+    setRouteHash(selectedProjectId ? projectRoute(selectedProjectId) : "#/root");
   }
 
   useEffect(() => {
@@ -319,15 +376,22 @@ export function useConsoleController() {
       .then(([nextProjects, nextSettings]) => {
         setProjects(nextProjects);
         setSettingsSnapshot(nextSettings);
-        // Auto-select root scope on initial load
-        setSelectedScope("root");
         setLoadState("idle");
+        void applyRouteFromHash(nextProjects);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load initial state");
         setLoadState("error");
       });
   }, []);
+
+  useEffect(() => {
+    function handleHashChange() {
+      void applyRouteFromHash(projects);
+    }
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [projects]);
 
   useEffect(() => {
     if (selectedScope !== "project" || !selectedProjectId) return;
@@ -337,9 +401,57 @@ export function useConsoleController() {
     return () => window.clearInterval(id);
   }, [selectedScope, selectedProjectId, selectedRun?.id]);
 
+  async function applyRouteFromHash(currentProjects: Project[]) {
+    const route = parseRouteHash();
+    if (route.scope === "settings") {
+      projectLoadSequence.current += 1;
+      setSelectedScope("settings");
+      setSelectedProjectId(null);
+      setSelectedRun(null);
+      setInspectedAgent(null);
+      await loadSettings();
+      await loadModelCatalog();
+      return;
+    }
+    if (route.scope === "project" && route.projectId) {
+      const exists = currentProjects.some((project) => project.id === route.projectId);
+      if (!exists && currentProjects.length) return;
+      const loadToken = ++projectLoadSequence.current;
+      setSelectedProjectId(route.projectId);
+      setSelectedScope("project");
+      setSelectedRun(null);
+      setInspectedAgent(null);
+      await loadProject(route.projectId, null, loadToken);
+      if (route.agentId) {
+        setInspectedAgent({ scope: "project", id: route.agentId });
+      }
+      return;
+    }
+    projectLoadSequence.current += 1;
+    setSelectedScope("root");
+    setSelectedProjectId(null);
+    setSelectedRun(null);
+    setInspectedAgent(null);
+    if (!window.location.hash) {
+      window.history.replaceState(null, "", "#/root");
+    }
+  }
+
+  function markProjectSeen(project: Project) {
+    const last = project.last_activity_at;
+    if (!last) return;
+    setSeenProjectActivity((current) => {
+      if (current[project.id] === last) return current;
+      const next = { ...current, [project.id]: last };
+      window.localStorage.setItem("rorven.seenProjectActivity", JSON.stringify(next));
+      return next;
+    });
+  }
+
   return {
     activityCards,
     chatMessages,
+    closeInspectedAgent,
     error,
     finishedSubagents,
     handleCreateProject,
@@ -348,6 +460,7 @@ export function useConsoleController() {
     handleUpdateWorkspaceBaseRoot,
     handleApprovalDecision,
     handleUpdateApprovalPolicy,
+    handleUpdateModelProfile,
     rootIsPending: rootProject.isPending,
     inspectActivity,
     inspectProjectAgent,
@@ -356,8 +469,10 @@ export function useConsoleController() {
     loadSettings,
     loadState,
     message,
+    modelCatalog,
     newProject,
-    projects,
+    projects: sortedProjects,
+    projectSortMode,
     rootMessage: rootProject.message,
     rootMessages: rootProject.messages,
     rootError: rootProject.error,
@@ -372,11 +487,50 @@ export function useConsoleController() {
     setInspectedAgent,
     setMessage,
     setNewProject,
+    setProjectSortMode,
     setRootMessage: rootProject.setMessage,
     setShowCreateProject,
     settingsLoadState,
     settingsSnapshot,
     showCreateProject,
     subagents,
+    unreadProjectIds,
   };
+}
+
+function setRouteHash(hash: string) {
+  if (window.location.hash !== hash) {
+    window.location.hash = hash;
+  }
+}
+
+function projectRoute(projectId: string) {
+  return `#/projects/${projectId}`;
+}
+
+function agentRoute(projectId: string | null, agentId: string) {
+  return projectId ? `#/projects/${projectId}/agents/${agentId}` : "#/root";
+}
+
+function parseRouteHash():
+  | { scope: "root" }
+  | { scope: "settings" }
+  | { scope: "project"; projectId: string; agentId?: string } {
+  const hash = window.location.hash || "#/root";
+  if (hash === "#/settings") return { scope: "settings" };
+  const match = hash.match(/^#\/projects\/([^/]+)(?:\/agents\/([^/]+))?$/);
+  if (match) {
+    return { scope: "project", projectId: match[1], agentId: match[2] };
+  }
+  return { scope: "root" };
+}
+
+function readSeenProjectActivity(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem("rorven.seenProjectActivity");
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }

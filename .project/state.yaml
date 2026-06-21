@@ -6,7 +6,7 @@ status: implementation-started
 constitution_version: 1.1.0
 active_milestone: M1-durable-walking-skeleton
 active_feature: 0005-proposal-only-write-tools
-last_verified_commit: 286308ea9294b46ca4dd32fd2d22858d75121f7b
+last_verified_commit: 57c11ddec7d0345ff304657627f324867bada207
 implementation_started: true
 current_decisions:
   architecture_style: modular-monolith
@@ -93,8 +93,10 @@ known_issues:
       pending approval records unless a standing approval policy applies. The
       local apply and bounded shell adapters are not sandboxed and do not yet
       have full idempotency, interrupted-apply recovery, or risky-command
-      approval coverage. Agents still cannot use git writes, access the browser,
-      use network tools, install packages, or retrieve secrets.
+      approval coverage. Safe diagnostics such as ping may run through the
+      bounded shell policy, but agents still cannot use git writes, access the
+      browser, fetch from network services, install packages, or retrieve
+      secrets.
     remediation: Add idempotency keys, recovery tests, and sandboxed apply before
       expanding mutable tools; add command approval policy before risky shell commands.
 last_updated: '2026-06-21'

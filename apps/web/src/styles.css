@@ -63,6 +63,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.app-shell:has(.settings-view) {
+  grid-template-columns: 280px minmax(460px, 1fr);
+}
+
 .projects-pane,
 .subagents-pane {
   min-width: 0;
@@ -114,10 +118,7 @@ button:disabled {
 .brand strong,
 .brand span,
 .root-project strong,
-.root-project span,
 .project-card strong,
-.project-card span,
-.project-card small,
 .subagent-copy strong,
 .subagent-copy span {
   display: block;
@@ -135,6 +136,7 @@ button:disabled {
 }
 
 .root-project,
+.settings-nav,
 .project-card,
 .subagent-card {
   width: 100%;
@@ -145,23 +147,13 @@ button:disabled {
 }
 
 .root-project {
-  padding: 11px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
   border-color: rgba(55, 192, 162, 0.35);
   background: rgba(55, 192, 162, 0.06);
-}
-
-.root-project span,
-.project-card span {
-  margin-top: 5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-card small {
-  margin-top: 5px;
-  color: var(--faint);
-  font-size: 0.72rem;
 }
 
 .sidebar-actions {
@@ -262,7 +254,47 @@ button:focus-visible {
 }
 
 .project-card {
-  padding: 10px;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+}
+
+.project-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-unread {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(213, 162, 66, 0.12);
+}
+
+.project-card:not(:has(.project-unread))::before {
+  content: "";
+}
+
+.project-sort .mantine-Input-input {
+  min-height: 30px;
+  background: var(--pane-3);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.settings-nav {
+  min-height: 38px;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  color: var(--muted);
 }
 
 .active {
@@ -474,19 +506,17 @@ button:focus-visible {
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 86px;
-  align-items: stretch;
+  align-items: end;
   gap: 10px;
   min-height: 67px;
-  max-height: 67px;
   padding: 12px 18px;
   border-top: 1px solid var(--line);
   background: var(--pane);
 }
 
 .composer textarea {
-  height: 42px;
   min-height: 42px;
-  max-height: 42px;
+  max-height: 168px;
   line-height: 1.35;
   overflow-y: auto;
 }
@@ -691,6 +721,33 @@ button:focus-visible {
   margin-top: 9px;
   color: var(--text);
   overflow-wrap: anywhere;
+}
+
+.model-profile-list {
+  display: grid;
+  gap: 10px;
+  max-width: 980px;
+}
+
+.model-profile-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 82px;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: var(--pane-3);
+  padding: 10px;
+}
+
+.model-profile-name strong,
+.model-profile-name span {
+  display: block;
+}
+
+.model-profile-name span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .approval-policy-control {

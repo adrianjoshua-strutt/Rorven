@@ -71,9 +71,10 @@ The orchestrator can create multiple child runs in one repository transaction. W
 
 The current implementation supports reviewer and implementer child runs. Child
 agents can use bounded multi-round brokered workspace tools for listing files,
-reading text files, and proposing text-file writes. Proposed writes create
-approval records and do not mutate the workspace until explicitly approved.
-Shell, git, browser, network, sandbox execution, broad agent catalogs, and full
+reading text files, proposing text-file writes, and running workspace-scoped
+shell diagnostics or read/test/build commands. Proposed writes create approval
+records and do not mutate the workspace until explicitly approved. Git, browser,
+network-fetch, sandbox execution, broad agent catalogs, and full
 permission-profile evaluation remain separate slices.
 
 ## Recovery

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import os
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from rorven.adapters.model import OPENROUTER_KEY_ENV, list_openrouter_models
 from rorven.composition import LocalServices
 from rorven_api.schemas import (
     ApprovalPolicySettingsRequest,
@@ -43,7 +45,16 @@ def register_routes(
     def list_projects() -> dict[str, Any]:
         projects = list(services.projects.list_projects())
         print(f"[rorven-api] returning {len(projects)} projects from {services.data_dir}/state.json", flush=True)
-        return {"projects": [project_to_api(project) for project in projects], "data_dir": str(services.data_dir)}
+        project_payloads = []
+        for project in projects:
+            payload = project_to_api(project)
+            try:
+                state = services.projects.get_project_state(project.id)
+                payload.update(_project_activity_metadata(state))
+            except KeyError:
+                pass
+            project_payloads.append(payload)
+        return {"projects": project_payloads, "data_dir": str(services.data_dir)}
 
     @app.get("/settings")
     def get_settings() -> dict[str, Any]:
@@ -64,6 +75,14 @@ def register_routes(
         }
         services.store.set_model_profile_ids(normalized)
         return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}
+
+    @app.get("/settings/model-catalog")
+    def get_model_catalog() -> dict[str, Any]:
+        try:
+            models = list_openrouter_models(os.environ.get(OPENROUTER_KEY_ENV))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"models": models}
 
     @app.post("/settings/project-defaults")
     def update_project_defaults(request: ProjectDefaultsSettingsRequest) -> dict[str, Any]:
@@ -166,3 +185,21 @@ def register_routes(
     @app.get("/worker/status")
     def get_worker_status() -> dict[str, Any]:
         return {"worker": worker_status() if worker_status else None}
+
+
+def _project_activity_metadata(state: Any) -> dict[str, Any]:
+    entries = list(state.conversation_entries)
+    user_entries = [entry for entry in entries if entry.role.value == "user" and entry.title == "You"]
+    pending_approvals = [approval for approval in state.approvals if approval.status.value == "pending"]
+    active_runs = [run for run in state.runs if run.status.value not in {"completed", "failed", "canceled"}]
+    latest_times = [state.project.created_at]
+    latest_times.extend(entry.created_at for entry in entries)
+    latest_times.extend(run.created_at for run in state.runs)
+    return {
+        "last_activity_at": max(latest_times).isoformat(),
+        "last_user_message_at": max((entry.created_at for entry in user_entries), default=None).isoformat()
+        if user_entries
+        else None,
+        "pending_approval_count": len(pending_approvals),
+        "active_run_count": len(active_runs),
+    }

@@ -106,12 +106,13 @@ built static app and local API with the embedded worker disabled.
 - Approved local text-file writes do not yet have full idempotency keys or
   interrupted-apply recovery tests.
 - Bounded workspace shell commands exist for child agents, but risky command
-  approval, arbitrary shell, git writes, browser, network, package installation,
-  and external service tools remain unavailable.
+  approval, arbitrary shell, git writes, browser, network-fetch, package
+  installation, and external service tools remain unavailable. Safe diagnostics
+  such as `ping` may run only through the policy-checked shell broker.
 
 ## 2026-06-21 approval and command follow-up evidence
 
-Validated implementation commit: pending
+Validated implementation commit: `80995094a365eafbc2091a45ea981726205b0a0b`
 
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
@@ -152,3 +153,47 @@ Coverage includes:
 - Settings persist text-file write approval policy.
 - Bounded workspace shell commands are policy checked and captured through the
   tool broker.
+
+## 2026-06-21 console routing/settings follow-up evidence
+
+Validated implementation commit: `57c11ddec7d0345ff304657627f324867bada207`
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover
+```
+
+Result: 52 tests passed.
+
+Coverage includes:
+
+- Project list API payloads expose latest activity, last user message,
+  pending approval counts, and active run counts for console sorting and
+  unread indicators.
+- Orchestrator model requests receive a project work-log facts section so
+  approval outcomes and subagent results are available to follow-up turns.
+- Shell policy allows safe diagnostic commands such as `ping www.google.de`
+  while continuing to deny network-fetch commands such as `curl`.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: TypeScript and Vite build passed.
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5185'
+npm.cmd run test:e2e
+```
+
+Result: 2 Playwright tests passed across desktop and mobile Chromium.
+
+Coverage includes:
+
+- Hash-routed root, settings, and project pages so browser Back returns inside
+  the console instead of leaving the app.
+- Settings contains real model-tier and project-default controls and no longer
+  exposes removed status-only tiles such as secret visibility or memory backend.
+- Project selection survives reload, and Shift+Enter submits through the chat
+  composer.

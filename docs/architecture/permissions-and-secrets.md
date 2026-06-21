@@ -77,9 +77,14 @@ The first implemented tool slice is local read-only workspace inspection:
   or rejection is exposed through run-scoped API endpoints.
 - Approved text-file writes are applied through the workspace broker by the
   approval service; agents do not receive the apply tool through policy.
+- Bounded shell commands run through the workspace broker with a scoped working
+  directory, timeout, captured output, and secret-bearing environment variables
+  removed. Policy blocks destructive, package-install, network-fetch, and
+  secret-sensitive commands while allowing safe diagnostics such as `ping`.
 - Tool requests, denials, completions, failures, and output artifacts are persisted
   for run inspection.
-- No shell, git, browser, network, or secret-bearing tools exist yet.
+- Git, browser, general network-fetch, and secret-bearing tools remain
+  unavailable.
 
 ## Root project provisioning
 

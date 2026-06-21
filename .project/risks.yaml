@@ -54,7 +54,7 @@ risks:
   - id: R-014
     title: Model-backed subagents are mistaken for tool-capable agents
     severity: high
-    mitigation: keep prompts explicit that this slice has read-only tools and proposal-only diffs; implement approvals, sandbox policy, and mutable tool audit before allowing code-changing claims
+    mitigation: keep prompts explicit that this slice has brokered inspection tools, proposal-only diffs, approved text-file applies, and bounded shell commands only; implement sandbox policy and broader mutable tool audit before allowing code-changing claims
   - id: R-015
     title: No worker task execution loop means projects silently queue without progressing
     severity: high
@@ -82,4 +82,4 @@ risks:
   - id: R-021
     title: Bounded shell commands exceed policy intent
     severity: high
-    mitigation: keep shell execution behind ToolPolicy and ToolBroker, strip secret-bearing environment variables, deny destructive/network/install patterns, and add explicit command approval policy before allowing risky commands
+    mitigation: keep shell execution behind ToolPolicy and ToolBroker, strip secret-bearing environment variables, deny destructive/network-fetch/package-install patterns, and add explicit command approval policy before allowing risky commands

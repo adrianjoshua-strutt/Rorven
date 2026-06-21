@@ -5,6 +5,7 @@ import { ChatBubble } from "../chat/ChatBubble";
 import { Composer } from "../chat/Composer";
 import { ConnectionState } from "../status/ConnectionState";
 import { MessageSquare } from "lucide-react";
+import { normalizeDisplayPath } from "../../utils/projects";
 
 export function ProjectChatView({
   chatMessages,
@@ -45,7 +46,7 @@ export function ProjectChatView({
     <>
       <header className="chat-header">
         <div>
-          <p>{project?.workspace.workspace_root ?? "No workspace selected"}</p>
+          <p>{project?.workspace.workspace_root ? normalizeDisplayPath(project.workspace.workspace_root) : "No workspace selected"}</p>
           <h1>{project?.name ?? "Choose a project"}</h1>
         </div>
         <ConnectionState state={loadState} />

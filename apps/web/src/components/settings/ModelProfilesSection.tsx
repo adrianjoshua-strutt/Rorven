@@ -1,10 +1,44 @@
-import { Paper, Table, Text } from "@mantine/core";
+import { Autocomplete, Button } from "@mantine/core";
 import { Layers3 } from "lucide-react";
-import { SettingsSnapshot } from "../../api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ModelCatalogEntry, SettingsSnapshot } from "../../api";
 import { SectionTitle } from "./SectionTitle";
-import { StatusBadge } from "./SettingsTile";
 
-export function ModelProfilesSection({ settings }: { settings: SettingsSnapshot | null }) {
+export function ModelProfilesSection({
+  modelCatalog,
+  settings,
+  onUpdateModelProfile,
+}: {
+  modelCatalog: ModelCatalogEntry[];
+  settings: SettingsSnapshot | null;
+  onUpdateModelProfile: (name: string, modelId: string) => void;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const catalogItems = useMemo(
+    () =>
+      modelCatalog.map((model) => ({
+        value: model.id,
+        label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+      })),
+    [modelCatalog],
+  );
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const profile of settings?.model_profiles ?? []) {
+      next[profile.name] = profile.model_id;
+    }
+    setDrafts(next);
+  }, [settings]);
+
+  function submitProfile(event: FormEvent, name: string) {
+    event.preventDefault();
+    const modelId = drafts[name]?.trim();
+    if (modelId) {
+      onUpdateModelProfile(name, modelId);
+    }
+  }
+
   return (
     <section className="settings-section">
       <SectionTitle
@@ -12,43 +46,32 @@ export function ModelProfilesSection({ settings }: { settings: SettingsSnapshot 
         title="Model tiers"
         subtitle="Agents ask for these profiles, not provider model IDs."
       />
-      <Paper className="profile-table" withBorder>
-        <Table.ScrollContainer minWidth={680}>
-          <Table verticalSpacing="sm" horizontalSpacing="md">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Tier</Table.Th>
-                <Table.Th>Adapter</Table.Th>
-                <Table.Th>Model</Table.Th>
-                <Table.Th>Timeout</Table.Th>
-                <Table.Th>Status</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {settings?.model_profiles.map((profile) => (
-                <Table.Tr key={profile.name}>
-                  <Table.Td>
-                    <Text fw={700}>{profile.name}</Text>
-                  </Table.Td>
-                  <Table.Td>{profile.adapter}</Table.Td>
-                  <Table.Td>
-                    <Text c={profile.model_id_configured ? undefined : "dimmed"}>
-                      {profile.model_id}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {profile.request_timeout_seconds ? `${profile.request_timeout_seconds}s` : "Unset"}
-                  </Table.Td>
-                  <Table.Td>
-                    <StatusBadge state={profile.model_id_configured ? "configured" : "missing"} />
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-        {!settings ? <div className="settings-empty">Settings metadata is not loaded.</div> : null}
-      </Paper>
+      <div className="model-profile-list">
+        {settings?.model_profiles.map((profile) => (
+          <form
+            className="model-profile-row"
+            key={profile.name}
+            onSubmit={(event) => submitProfile(event, profile.name)}
+          >
+            <div className="model-profile-name">
+              <strong>{profile.name}</strong>
+              <span>{profile.request_timeout_seconds ? `${profile.request_timeout_seconds}s timeout` : "default timeout"}</span>
+            </div>
+            <Autocomplete
+              data={catalogItems}
+              value={drafts[profile.name] ?? ""}
+              onChange={(value) => setDrafts((current) => ({ ...current, [profile.name]: value }))}
+              placeholder="Search OpenRouter models"
+              limit={12}
+              comboboxProps={{ withinPortal: true }}
+            />
+            <Button type="submit" variant="filled" size="sm">
+              Save
+            </Button>
+          </form>
+        ))}
+        {!settings ? <div className="settings-empty">Settings are not loaded.</div> : null}
+      </div>
     </section>
   );
 }

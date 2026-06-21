@@ -33,6 +33,16 @@ class WorkspaceToolTests(unittest.TestCase):
             child,
             ToolRequest("workspace.run_shell_command", {"command": "python --version"}),
         )
+        diagnostic = policy.evaluate(
+            project,
+            child,
+            ToolRequest("workspace.run_shell_command", {"command": "ping www.google.de"}),
+        )
+        network_fetch = policy.evaluate(
+            project,
+            child,
+            ToolRequest("workspace.run_shell_command", {"command": "curl https://example.com"}),
+        )
         destructive = policy.evaluate(
             project,
             child,
@@ -40,6 +50,8 @@ class WorkspaceToolTests(unittest.TestCase):
         )
 
         self.assertTrue(safe.allowed)
+        self.assertTrue(diagnostic.allowed)
+        self.assertFalse(network_fetch.allowed)
         self.assertFalse(destructive.allowed)
 
     def test_local_workspace_broker_reads_text_inside_workspace(self) -> None:

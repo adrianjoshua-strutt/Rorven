@@ -3,7 +3,6 @@ import { AgentWorkView } from "./components/agents/AgentWorkView";
 import { RootAgentWorkView } from "./components/agents/RootAgentWorkView";
 import { ActivityRail } from "./components/layout/ActivityRail";
 import { ProjectsPane } from "./components/layout/ProjectsPane";
-import { CreateProjectModal } from "./components/projects/CreateProjectModal";
 import { ProjectChatView } from "./components/projects/ProjectChatView";
 import { RootProjectView } from "./components/projects/RootProjectView";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -18,12 +17,14 @@ export function App() {
     <main className="app-shell">
       <ProjectsPane
         projects={consoleState.projects}
+        projectSortMode={consoleState.projectSortMode}
         selectedProjectId={consoleState.selectedProjectId}
         selectedScope={consoleState.selectedScope}
-        onCreateProject={() => consoleState.setShowCreateProject(true)}
         onSelectProject={(projectId) => void consoleState.selectProject(projectId)}
         onSelectRoot={consoleState.selectRoot}
         onSelectSettings={consoleState.selectSettings}
+        onSortChange={consoleState.setProjectSortMode}
+        unreadProjectIds={consoleState.unreadProjectIds}
       />
 
       <section className="chat-pane">
@@ -31,14 +32,14 @@ export function App() {
           <AgentWorkView
             agent={consoleState.inspectedProjectAgent}
             run={consoleState.selectedRun}
-            onBack={() => consoleState.setInspectedAgent(null)}
+            onBack={consoleState.closeInspectedAgent}
             onApprove={(approval) => void consoleState.handleApprovalDecision(approval, "approve")}
             onReject={(approval) => void consoleState.handleApprovalDecision(approval, "reject")}
           />
         ) : consoleState.inspectedRootAgent ? (
           <RootAgentWorkView
             agent={consoleState.inspectedRootAgent}
-            onBack={() => consoleState.setInspectedAgent(null)}
+            onBack={consoleState.closeInspectedAgent}
           />
         ) : consoleState.selectedScope === "root" ? (
           <RootProjectView
@@ -54,15 +55,15 @@ export function App() {
           />
         ) : consoleState.selectedScope === "settings" ? (
           <SettingsView
-            apiEndpoint={import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"}
             loadState={consoleState.settingsLoadState}
             settings={consoleState.settingsSnapshot}
+            modelCatalog={consoleState.modelCatalog}
             onReload={() => void consoleState.loadSettings()}
-            onUpdateApprovalPolicy={(value) =>
-              void consoleState.handleUpdateApprovalPolicy(value)
-            }
             onUpdateWorkspaceBaseRoot={(value) =>
               void consoleState.handleUpdateWorkspaceBaseRoot(value)
+            }
+            onUpdateModelProfile={(name, modelId) =>
+              void consoleState.handleUpdateModelProfile(name, modelId)
             }
           />
         ) : (
@@ -83,19 +84,12 @@ export function App() {
         )}
       </section>
 
-      <ActivityRail
-        total={consoleState.activityCards.length}
-        running={consoleState.runningSubagents}
-        finished={consoleState.finishedSubagents}
-        onInspect={consoleState.inspectActivity}
-      />
-
-      {consoleState.showCreateProject ? (
-        <CreateProjectModal
-          draft={consoleState.newProject}
-          onChange={consoleState.setNewProject}
-          onClose={() => consoleState.setShowCreateProject(false)}
-          onSubmit={consoleState.handleCreateProject}
+      {consoleState.selectedScope !== "settings" ? (
+        <ActivityRail
+          total={consoleState.activityCards.length}
+          running={consoleState.runningSubagents}
+          finished={consoleState.finishedSubagents}
+          onInspect={consoleState.inspectActivity}
         />
       ) : null}
     </main>

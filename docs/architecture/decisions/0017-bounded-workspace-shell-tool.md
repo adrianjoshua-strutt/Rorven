@@ -23,8 +23,9 @@ The first local adapter implementation:
 - caps command length and timeout;
 - strips raw secret-bearing environment variables before execution;
 - denies root-orchestrator access;
-- denies obvious destructive, package-install, network, and secret-path
-  commands through policy.
+- denies obvious destructive, package-install, network-fetch, and secret-path
+  commands through policy while allowing safe diagnostics such as version checks
+  or `ping` when policy accepts them.
 
 Agents may use this tool for bounded read, test, build, and inspection commands.
 Risky command approvals are not part of this decision and require a later policy
@@ -35,8 +36,9 @@ extension.
 Implementer and reviewer subagents can now gather runtime evidence without
 claiming unsupported machine access. The tool is still not a complete sandbox.
 It must not be treated as permission to run arbitrary commands, mutate the
-workspace without approval, install dependencies, push to remotes, or access
-network services.
+workspace without approval, install dependencies, push to remotes, or fetch from
+network services. Connectivity diagnostics may be run only through the same
+policy-checked brokered command path.
 
 ## Enforcement
 

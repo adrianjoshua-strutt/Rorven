@@ -1,27 +1,24 @@
 import { ActionIcon } from "@mantine/core";
 import { CircleDashed } from "lucide-react";
-import { SettingsSnapshot } from "../../api";
+import { ModelCatalogEntry, SettingsSnapshot } from "../../api";
 import { LoadState } from "../../types";
 import { ConnectionState } from "../status/ConnectionState";
-import { CredentialsSection } from "./CredentialsSection";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ProjectDefaultsSection } from "./ProjectDefaultsSection";
-import { RuntimeSection } from "./RuntimeSection";
-import { SafetyPolicySection } from "./SafetyPolicySection";
 
 export function SettingsView({
   settings,
   loadState,
-  apiEndpoint,
+  modelCatalog,
   onReload,
-  onUpdateApprovalPolicy,
+  onUpdateModelProfile,
   onUpdateWorkspaceBaseRoot,
 }: {
   settings: SettingsSnapshot | null;
   loadState: LoadState;
-  apiEndpoint: string;
+  modelCatalog: ModelCatalogEntry[];
   onReload: () => void;
-  onUpdateApprovalPolicy: (textFileWrite: string) => void;
+  onUpdateModelProfile: (name: string, modelId: string) => void;
   onUpdateWorkspaceBaseRoot: (workspaceBaseRoot: string) => void;
 }) {
   const credential = settings?.credentials[0] ?? null;
@@ -57,10 +54,11 @@ export function SettingsView({
             </p>
           </section>
         ) : null}
-        <CredentialsSection credential={credential} />
-        <ModelProfilesSection settings={settings} />
-        <RuntimeSection apiEndpoint={apiEndpoint} settings={settings} />
-        <SafetyPolicySection settings={settings} onUpdateApprovalPolicy={onUpdateApprovalPolicy} />
+        <ModelProfilesSection
+          modelCatalog={modelCatalog}
+          settings={settings}
+          onUpdateModelProfile={onUpdateModelProfile}
+        />
         <ProjectDefaultsSection
           settings={settings}
           onUpdateWorkspaceBaseRoot={onUpdateWorkspaceBaseRoot}

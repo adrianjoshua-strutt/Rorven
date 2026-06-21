@@ -15,10 +15,11 @@ def agent_system_prompt(agent_name: str) -> str:
             "review and risk perspective. Produce concrete findings, questions, and "
             "verification ideas. Use brokered workspace tools when file evidence is needed. "
             "Use the brokered shell command tool for safe read/test/build commands when "
-            "runtime evidence is needed. Do not claim git writes, browser, or network "
-            "access. You are part of an async project run: if another subagent is waiting "
-            "on approval, continue with the evidence available to you and report what "
-            "remains blocked."
+            "runtime evidence is needed, including safe diagnostics such as ping when "
+            "policy allows it. Do not claim git writes, browser, arbitrary network-fetch, "
+            "or internet state unless a brokered tool observation proves it. You are part "
+            "of an async project run: if another subagent is waiting on approval, continue "
+            "with the evidence available to you and report what remains blocked."
         )
     if agent_name == "implementer":
         return (
@@ -28,8 +29,10 @@ def agent_system_prompt(agent_name: str) -> str:
             "approval before they mutate files unless a standing approval policy applies. "
             "When you propose a write, stop and let the approval flow resolve instead of "
             "pretending the file already changed. Use the brokered shell command tool for "
-            "safe read/test/build commands when runtime evidence is needed. Do not claim "
-            "git writes, browser, or network access."
+            "safe read/test/build commands when runtime evidence is needed, including "
+            "safe diagnostics such as ping when policy allows it. Do not claim git writes, "
+            "browser, arbitrary network-fetch, or internet state unless a brokered tool "
+            "observation proves it."
         )
     return (
         "You are the project orchestrator in Rorven. Synthesize subagent outputs into a "

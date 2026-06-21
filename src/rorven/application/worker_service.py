@@ -585,6 +585,7 @@ class WorkerService:
         run = self._runs.get_run(root.project_id, root.run_id)
         project = self._runs.get_project(root.project_id)
         conversation_history = self._project_orchestrator_entries(root.project_id, exclude_run_id=run.id)
+        work_log = self._project_work_log_entries(root.project_id, exclude_run_id=run.id)
         request = ModelRequest(
             profile=root.definition.model_profile,
             session_id=f"{root.run_id}:{root.id}:dispatch",
@@ -598,6 +599,7 @@ class WorkerService:
                     if entry.body.strip()
                 ),
                 ModelMessage("system", _orchestrator_history_end(len(conversation_history))),
+                ModelMessage("system", _orchestrator_work_log_context(work_log)),
                 ModelMessage("user", run.command),
             ),
             max_output_tokens=700,
@@ -617,6 +619,22 @@ class WorkerService:
             and (exclude_run_id is None or entry.run_id != exclude_run_id)
         ]
         return entries[-MAX_ORCHESTRATOR_HISTORY_ENTRIES:]
+
+    def _project_work_log_entries(
+        self,
+        project_id: str,
+        *,
+        exclude_run_id: str | None = None,
+    ) -> list[ConversationEntry]:
+        entries = [
+            entry
+            for entry in self._conversations.list_conversation_for_project(project_id)
+            if not _is_project_orchestrator_entry(entry)
+            and (exclude_run_id is None or entry.run_id != exclude_run_id)
+            and entry.role in {ConversationRole.ASSISTANT, ConversationRole.EVENT, ConversationRole.TOOL}
+            and entry.body.strip()
+        ]
+        return entries[-10:]
 
     def _persist_child_dispatch(
         self,
@@ -1018,6 +1036,21 @@ def _orchestrator_history_end(history_count: int) -> str:
         "the transcript above. Resolve references like 'that', 'the file', 'the folder', "
         "or 'what I told you' from the transcript before choosing answer or dispatch."
     )
+
+
+def _orchestrator_work_log_context(entries: Sequence[ConversationEntry]) -> str:
+    if not entries:
+        return "Project work-log facts: no prior subagent, tool, or approval facts are available."
+    lines = [
+        "Project work-log facts from prior subagent/tool/approval entries, oldest to newest.",
+        "Use these facts to answer follow-up questions about files, approvals, and completed work.",
+    ]
+    for entry in entries:
+        body = " ".join(entry.body.strip().split())
+        if len(body) > 420:
+            body = f"{body[:417].rstrip()}..."
+        lines.append(f"- {entry.title}: {body}")
+    return "\n".join(lines)
 
 
 def _dispatch_summary(decision: OrchestratorDecision) -> str:

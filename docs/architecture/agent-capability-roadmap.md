@@ -8,7 +8,7 @@ runtime slice intentionally exposes only brokered workspace tools:
 - `workspace.propose_text_file_write`
 - `workspace.apply_text_file_write` after approval
 - `workspace.run_shell_command` for bounded, workspace-scoped read/test/build
-  commands
+  commands and safe diagnostics such as `ping` when policy accepts them
 
 This keeps the first write path auditable while approvals, persistence, and
 project chat history stabilize.
@@ -53,8 +53,9 @@ subagent type, or one session.
 
 The first shell command tool is intentionally bounded: it runs only inside the
 project workspace, strips raw secret-bearing environment variables, captures
-stdout/stderr/exit code, caps timeout, and denies obvious destructive, network,
-package-install, and secret-path commands.
+stdout/stderr/exit code, caps timeout, and denies obvious destructive,
+network-fetch, package-install, and secret-path commands. It may run safe diagnostic
+commands such as `ping`, but it is not a general browser or network-fetch tool.
 
 ## Current prompt source
 

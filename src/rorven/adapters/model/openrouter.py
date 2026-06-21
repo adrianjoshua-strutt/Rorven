@@ -12,6 +12,7 @@ from rorven.application.modeling import ModelRequest, ModelResponse
 
 
 OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 
 class OpenRouterModelGateway:
@@ -96,3 +97,42 @@ class OpenRouterModelGateway:
 
 def _sanitize_error(message: str, api_key: str) -> str:
     return message.replace(api_key, "[redacted]")
+
+
+def list_openrouter_models(api_key: str | None = None, timeout: int = 20) -> list[dict[str, Any]]:
+    headers = {
+        "Content-Type": "application/json",
+        "X-Title": "Rorven",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = Request(OPENROUTER_MODELS_URL, method="GET", headers=headers)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        safe_detail = _sanitize_error(detail, api_key) if api_key else detail
+        raise RuntimeError(f"OpenRouter models HTTP {exc.code}: {safe_detail}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"OpenRouter models request failed: {exc}") from exc
+
+    decoded = json.loads(raw)
+    data = decoded.get("data") if isinstance(decoded, dict) else None
+    if not isinstance(data, list):
+        raise RuntimeError("OpenRouter models response did not include data")
+    models: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or not model_id.strip():
+            continue
+        models.append(
+            {
+                "id": model_id,
+                "name": item.get("name") if isinstance(item.get("name"), str) else model_id,
+                "context_length": item.get("context_length") if isinstance(item.get("context_length"), int) else None,
+            }
+        )
+    return models

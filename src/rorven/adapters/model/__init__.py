@@ -1,6 +1,6 @@
 """Model provider adapters."""
 
-from rorven.adapters.model.openrouter import OpenRouterModelGateway
+from rorven.adapters.model.openrouter import OpenRouterModelGateway, list_openrouter_models
 from rorven.adapters.model.profiles import (
     DEFAULT_MODEL_IDS,
     MODEL_PROFILE_NAMES,
@@ -15,5 +15,6 @@ __all__ = [
     "ModelProfileConfig",
     "OPENROUTER_KEY_ENV",
     "OpenRouterModelGateway",
+    "list_openrouter_models",
     "load_model_profile_config",
 ]

@@ -1,5 +1,6 @@
 import { AgentRun, ApprovalRecord, ArtifactRecord, Project, RunState } from "../api";
 import { AgentWorkEntry, ChatMessage } from "../types";
+import { normalizeDisplayPath } from "./projects";
 import { isDone } from "./status";
 
 export function buildProjectChat(
@@ -55,7 +56,7 @@ function appendSelectedRunPlaceholder(
   messages: ChatMessage[],
   run: RunState | null,
   subagents: AgentRun[],
-  rootTranscript: { run_id: string; role: string }[],
+  rootTranscript: { run_id: string; role: string; created_at: string }[],
 ): void {
   if (!run) return;
   const root = run.agent_runs.find((agentRun) => agentRun.parent_agent_run_id === null);
@@ -65,6 +66,10 @@ function appendSelectedRunPlaceholder(
   if (rootHasAssistantEntry) return;
 
   let orchestratorBody: string;
+  const currentUserEntry = rootTranscript.find((entry) => entry.run_id === run.id && entry.role === "user");
+  const placeholderTime = currentUserEntry
+    ? new Date(new Date(currentUserEntry.created_at).getTime() + 1).toISOString()
+    : root?.created_at ?? run.created_at;
   if (root?.result_artifact_id) {
     orchestratorBody =
       cleanChatBody(run.artifacts.find((a) => a.id === root.result_artifact_id)?.content ?? "") ||
@@ -89,7 +94,7 @@ function appendSelectedRunPlaceholder(
     side: "orchestrator",
     title: root?.definition.name ?? "Project orchestrator",
     body: cleanChatBody(orchestratorBody),
-    time: root?.created_at ?? run.created_at,
+    time: placeholderTime,
     status: root?.status ?? run.status,
   });
 }
@@ -197,7 +202,7 @@ function summarizeApprovalProposal(approval: ApprovalRecord, artifact?: Artifact
     };
     const path = payload.result?.metadata?.path ?? payload.request?.input?.path;
     const proposal = typeof payload.result?.content === "string" ? payload.result.content : "";
-    const pathLine = typeof path === "string" ? `Path: ${path}` : "Path: workspace file";
+    const pathLine = typeof path === "string" ? `Path: ${normalizeDisplayPath(path)}` : "Path: workspace file";
     const stateLine =
       approval.status === "pending"
         ? "This proposal is waiting for your approval."

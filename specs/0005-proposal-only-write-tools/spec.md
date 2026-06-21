@@ -33,8 +33,9 @@ By operator request, this slice now includes a bounded
 `workspace.run_shell_command` tool for child agents. It is exposed through the
 same `ToolBroker` and `ToolPolicy` ports, runs only inside the project
 workspace, strips secret-bearing environment variables, caps timeout, and denies
-obvious destructive, network, install, and secret-path commands. Risky command
-approval remains out of scope and is tracked separately.
+obvious destructive, network-fetch, install, and secret-path commands. Safe
+diagnostic commands such as `ping` may run when policy accepts them. Risky
+command approval remains out of scope and is tracked separately.
 
 ## Acceptance
 
@@ -47,6 +48,7 @@ approval remains out of scope and is tracked separately.
   work view and can approve or reject them through the API.
 - Project and subagent conversations are rendered from durable transcript
   entries rather than reconstructed from only the selected run.
-- Child agents can run bounded workspace commands through policy-checked shell
-  execution without inheriting raw secrets.
+- Child agents can run bounded workspace commands, including accepted safe
+  diagnostics, through policy-checked shell execution without inheriting raw
+  secrets.
 - Frontend build succeeds against the API contract.

@@ -72,8 +72,9 @@ def orchestrator_dispatch_contract() -> str:
         "The write tool creates a tracked approval proposal; it only mutates files "
         "after explicit or standing approval. The shell command tool is workspace "
         "scoped, audited, timeout-limited, and policy-denied for obvious destructive, "
-        "network, install, and secret-sensitive commands. Subagents still have no "
-        "browser or network tool."
+        "package-install, network-fetch, and secret-sensitive commands. Safe "
+        "diagnostic commands such as version checks or ping may be used when policy "
+        "accepts them. Subagents still have no browser or arbitrary network-fetch tool."
     )
 
 

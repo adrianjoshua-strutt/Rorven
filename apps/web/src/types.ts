@@ -17,6 +17,7 @@ export type ChatMessage = {
 };
 
 export type SelectedScope = "root" | "project" | "settings";
+export type ProjectSortMode = "latest_activity" | "last_user_message" | "created_at";
 
 export type InspectedAgent =
   | { scope: "project"; id: string }

@@ -6,6 +6,10 @@ export type Project = {
     workspace_root: string;
   };
   created_at: string;
+  last_activity_at?: string;
+  last_user_message_at?: string | null;
+  pending_approval_count?: number;
+  active_run_count?: number;
   runs?: RunSummary[];
   agent_runs?: AgentRun[];
   tasks?: Task[];
@@ -153,6 +157,12 @@ export type SettingsSnapshot = {
   };
 };
 
+export type ModelCatalogEntry = {
+  id: string;
+  name: string;
+  context_length: number | null;
+};
+
 export type RootActivity = {
   id: string;
   name: string;
@@ -224,6 +234,24 @@ export async function updateProjectDefaults(input: {
     body: JSON.stringify(input),
   });
   return payload.settings;
+}
+
+export async function updateModelProfiles(input: {
+  utility?: string;
+  balanced?: string;
+  reasoning?: string;
+  frontier?: string;
+}): Promise<SettingsSnapshot> {
+  const payload = await request<{ settings: SettingsSnapshot }>("/settings/model-profiles", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return payload.settings;
+}
+
+export async function getModelCatalog(): Promise<ModelCatalogEntry[]> {
+  const payload = await request<{ models: ModelCatalogEntry[] }>("/settings/model-catalog");
+  return payload.models;
 }
 
 export async function updateApprovalPolicy(input: {
