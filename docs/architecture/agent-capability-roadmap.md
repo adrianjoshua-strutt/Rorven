@@ -5,13 +5,12 @@ runtime slice intentionally exposes only brokered workspace tools:
 
 - `workspace.list_files`
 - `workspace.read_text_file`
-- `workspace.propose_text_file_write`
-- `workspace.apply_text_file_write` after approval
+- `workspace.write_text_file`
 - `workspace.run_shell_command` for bounded, workspace-scoped read/test/build
   commands and safe diagnostics such as `ping` when policy accepts them
 
-This keeps the first write path auditable while approvals, persistence, and
-project chat history stabilize.
+This keeps the first write path brokered and inspectable while persistence,
+policy, and project chat history stabilize.
 
 The root project has a separate control-plane action contract. It can create or
 register projects, search persisted project records, explain one project,
@@ -44,18 +43,11 @@ brokered tools behind domain-owned ports:
 Every broker needs contract tests, persistence tests, approval policy coverage,
 and explicit secret redaction before it becomes available to agents.
 
-## Approval modes
+## Future approval modes
 
-The current text-file write path supports these persisted modes:
-
-- `ask_each_time`: create a pending approval and pause only the subagent.
-- `auto_apply_text_file_writes`: create an approval record and immediately apply
-  the proposal under a standing policy.
-- `reject_text_file_writes`: create and reject the proposal by policy.
-
-Future command and patch brokers should use the same shape but add scoped rules,
-for example approving one command, one command prefix, one directory, one
-subagent type, or one session.
+Future command, patch, and destructive-file brokers should support scoped
+approval rules, for example approving one command, one command prefix, one
+directory, one subagent type, or one session.
 
 The first shell command tool is intentionally bounded: it runs only inside the
 project workspace, strips raw secret-bearing environment variables, captures

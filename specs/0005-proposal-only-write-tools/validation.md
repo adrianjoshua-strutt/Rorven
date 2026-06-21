@@ -281,3 +281,37 @@ npm.cmd run test:e2e
 
 Result: blocked in this environment while cleaning Playwright state with
 `EPERM: operation not permitted, unlink 'apps/web/test-results/.last-run.json'`.
+
+## 2026-06-21 direct workspace tool follow-up evidence
+
+Validated implementation commit: pending commit.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest tests.test_workspace_tools tests.test_local_file_store.LocalFileStoreTests.test_child_agent_can_write_file_directly tests.test_local_file_store.LocalFileStoreTests.test_child_agent_can_read_then_write_across_tool_rounds tests.test_local_file_store.LocalFileStoreTests.test_direct_write_completes_with_applied_summary_not_raw_tool_json tests.test_api_integration.ApiIntegrationTests.test_embedded_worker_runs_subagent_tools_and_approval_flow tests.test_api_integration.ApiIntegrationTests.test_worker_work_once_directly_applies_workspace_write
+```
+
+Result: 13 tests passed.
+
+Coverage includes:
+
+- `workspace.write_text_file` writes scoped UTF-8 files through the broker.
+- Child agents can read, write, continue across tool rounds, and complete
+  without approval dead-ends.
+- Embedded API worker applies direct child-agent writes end-to-end.
+- The project chat shows compact subagent status while the subagent work view
+  keeps the full harness transcript.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover
+```
+
+Result: 59 tests passed.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: TypeScript and Vite build passed.

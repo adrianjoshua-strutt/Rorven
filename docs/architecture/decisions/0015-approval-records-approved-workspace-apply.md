@@ -1,6 +1,6 @@
 # ADR 0015-approval-records-approved-workspace-apply: Add approval records for mutable workspace actions
 
-Status: Proposed  
+Status: Proposed; text-file write execution superseded by ADR 0019  
 Date: 2026-06-16
 
 ## Context

@@ -61,22 +61,20 @@ Preferred flow:
 Agent -> Tool Broker -> Permission Engine -> Credential Broker -> Tool Adapter -> External Service
 ```
 
-The first implemented tool slice is local read-only workspace inspection:
+The current implemented tool slice is local workspace inspection, direct text
+writes, and bounded CLI execution:
 
 - `ToolBroker` is the application-owned port for tool execution.
 - `ToolPolicy` is the application-owned port for authorization decisions.
 - Product composition wires `WorkspaceReadPolicy` and `LocalWorkspaceToolBroker`.
-- Child agents may request one round of `workspace.list_files`,
-  `workspace.read_text_file`, or `workspace.propose_text_file_write`.
+- Child agents may request bounded rounds of `workspace.list_files`,
+  `workspace.read_text_file`, `workspace.write_text_file`, and
+  `workspace.run_shell_command`.
 - Root orchestrators may not invoke workspace tools directly.
 - Sensitive-looking paths such as `.env`, `.git`, key, token, secret, or
   credential files are denied before execution.
-- Text-file write proposals return persisted unified diffs and do not modify the
-  workspace.
-- Successful text-file write proposals create pending approval records. Approval
-  or rejection is exposed through run-scoped API endpoints.
-- Approved text-file writes are applied through the workspace broker by the
-  approval service; agents do not receive the apply tool through policy.
+- Text-file writes create or overwrite one complete UTF-8 file inside the
+  workspace after policy evaluation.
 - Bounded shell commands run through the workspace broker with a scoped working
   directory, timeout, captured output, and secret-bearing environment variables
   removed. Policy blocks destructive, package-install, network-fetch, and

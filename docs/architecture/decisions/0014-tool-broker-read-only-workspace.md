@@ -1,6 +1,6 @@
 # ADR 0014-tool-broker-read-only-workspace: Add brokered workspace tools
 
-Status: Proposed  
+Status: Proposed; text-file write decision superseded by ADR 0019  
 Date: 2026-06-16
 
 ## Context

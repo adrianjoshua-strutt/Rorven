@@ -52,7 +52,6 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
         conversations=store,
         tool_policy=WorkspaceReadPolicy(),
         tool_broker=tool_broker,
-        approval_policy=store,
     )
     projects = ProjectService(
         runs=store,

@@ -1,8 +1,7 @@
-"""Local read-only workspace tool broker."""
+"""Local workspace tool broker."""
 
 from __future__ import annotations
 
-from difflib import unified_diff
 import json
 import os
 from pathlib import Path
@@ -50,10 +49,10 @@ class LocalWorkspaceToolBroker:
             return self._list_files(project, request)
         if request.name == "workspace.read_text_file":
             return self._read_text_file(project, request)
-        if request.name == "workspace.propose_text_file_write":
-            return self._propose_text_file_write(project, request)
+        if request.name == "workspace.write_text_file":
+            return self._write_text_file(project, request)
         if request.name == "workspace.apply_text_file_write":
-            return self._apply_text_file_write(project, agent_run, request)
+            return self._write_text_file(project, request)
         if request.name == "workspace.run_shell_command":
             return self._run_shell_command(project, request)
         raise ValueError(f"unsupported tool: {request.name}")
@@ -113,7 +112,7 @@ class LocalWorkspaceToolBroker:
             },
         )
 
-    def _propose_text_file_write(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
+    def _write_text_file(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
         root = _workspace_root(project)
         target = _resolve_inside(root, _input_path(request))
         relative = target.relative_to(root)
@@ -126,63 +125,16 @@ class LocalWorkspaceToolBroker:
         if len(proposed_bytes) > MAX_PROPOSED_TEXT_BYTES:
             raise ValueError(f"content must be at most {MAX_PROPOSED_TEXT_BYTES} bytes")
         if target.exists() and not target.is_file():
-            raise ValueError("workspace.propose_text_file_write requires a file path")
-        current = ""
-        existed = target.exists()
-        if existed:
-            current = target.read_bytes().decode("utf-8", errors="replace")
-        diff = "".join(
-            unified_diff(
-                current.splitlines(keepends=True),
-                proposed.splitlines(keepends=True),
-                fromfile=f"a/{relative.as_posix()}",
-                tofile=f"b/{relative.as_posix()}",
-            )
-        )
-        if not diff:
-            diff = f"No changes proposed for {relative.as_posix()}.\n"
-        return ToolExecutionResult(
-            content=diff,
-            metadata={
-                "tool": request.name,
-                "path": relative.as_posix(),
-                "proposal": "text-file-write",
-                "would_create": not existed,
-                "bytes_proposed": len(proposed_bytes),
-                "applied": False,
-            },
-        )
-
-    def _apply_text_file_write(
-        self,
-        project: Project,
-        agent_run: AgentRun,
-        request: ToolRequest,
-    ) -> ToolExecutionResult:
-        root = _workspace_root(project)
-        target = _resolve_inside(root, _input_path(request))
-        relative = target.relative_to(root)
-        if _is_sensitive(relative):
-            raise ValueError("path is blocked by secret-safety policy")
-        proposed = request.input.get("content")
-        if not isinstance(proposed, str):
-            raise ValueError("content must be a string")
-        proposed_bytes = proposed.encode("utf-8")
-        if len(proposed_bytes) > MAX_PROPOSED_TEXT_BYTES:
-            raise ValueError(f"content must be at most {MAX_PROPOSED_TEXT_BYTES} bytes")
-        if target.exists() and not target.is_file():
-            raise ValueError("workspace.apply_text_file_write requires a file path")
+            raise ValueError(f"{request.name} requires a file path")
 
         before = target.read_text(encoding="utf-8") if target.exists() else None
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(proposed, encoding="utf-8")
         return ToolExecutionResult(
-            content=f"Applied text-file write to {relative.as_posix()}.\n",
+            content=f"Wrote {relative.as_posix()} ({len(proposed_bytes)} bytes).\n",
             metadata={
                 "tool": request.name,
                 "path": relative.as_posix(),
-                "proposal_artifact_id": request.input.get("proposal_artifact_id"),
-                "approval_id": request.input.get("approval_id"),
                 "bytes_written": len(proposed_bytes),
                 "created": before is None,
                 "changed": before != proposed,

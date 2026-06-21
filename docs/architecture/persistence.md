@@ -26,9 +26,8 @@ LangGraph checkpoint tables may exist in the same database but remain adapter-ow
 - Events describing a state transition are written in the same transaction as the state change.
 - Outbound side effects use an outbox or equivalent idempotent dispatch mechanism.
 - Leases use database time and explicit expiration.
-- Mutable workspace proposals produce durable approval records before application.
-- Approval decisions and their lifecycle events are committed with the approval
-  state transition.
+- Mutable workspace tool calls produce durable tool execution artifacts before
+  the worker reports completion.
 - Agent transcript entries record inspectable prompts, model-visible decisions,
   tool requests/results, approvals, errors, and final answers. Private
   chain-of-thought is not persisted.

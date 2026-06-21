@@ -20,7 +20,6 @@ from rorven.application.dispatching import (
 from rorven.application.modeling import ModelMessage, ModelRequest, ModelResponse
 from rorven.application.ports import (
     ApprovalRepository,
-    ApprovalPolicyRepository,
     ArtifactStore,
     ConversationRepository,
     EventRepository,
@@ -78,7 +77,6 @@ class WorkerService:
         conversations: ConversationRepository,
         tool_policy: ToolPolicy | None = None,
         tool_broker: ToolBroker | None = None,
-        approval_policy: ApprovalPolicyRepository | None = None,
     ) -> None:
         self._runs = runs
         self._tasks = tasks
@@ -89,7 +87,6 @@ class WorkerService:
         self._conversations = conversations
         self._tool_policy = tool_policy or DenyAllToolPolicy()
         self._tool_broker = tool_broker
-        self._approval_policy = approval_policy
 
     def work_once(self, worker_id: str, limit: int = 2) -> Sequence[Task]:
         leased = self._tasks.lease_ready(worker_id, timedelta(seconds=30), limit)
@@ -295,21 +292,16 @@ class WorkerService:
                 EventType.TOOL_COMPLETED,
                 {"tool": request.name, "artifact_id": artifact.id, **result.metadata},
             )
-            approval = self._create_approval_for_proposal(agent_run, request, result, artifact)
             results.append(
                 {
                     "tool": request.name,
                     "allowed": True,
                     "artifact_id": artifact.id,
-                    "approval_id": approval.id if approval else None,
-                    "approval_status": approval.status.value if approval else None,
                     "metadata": result.metadata,
                     "content": result.content,
                 }
             )
             title = f"{request.name} completed"
-            if approval:
-                title = f"{request.name} awaiting approval"
             self._append_conversation(
                 agent_run,
                 ConversationRole.TOOL,
@@ -318,140 +310,6 @@ class WorkerService:
                 artifact.id,
             )
         return results
-
-    def _create_approval_for_proposal(
-        self,
-        agent_run: AgentRun,
-        request: ToolRequest,
-        result: ToolExecutionResult,
-        artifact: ArtifactMetadata,
-    ) -> Approval | None:
-        if request.name != "workspace.propose_text_file_write":
-            return None
-        if result.metadata.get("proposal") != "text-file-write":
-            return None
-        approval = Approval.create(
-            project_id=agent_run.project_id,
-            run_id=agent_run.run_id,
-            agent_run_id=agent_run.id,
-            artifact_id=artifact.id,
-            action="workspace.apply_text_file_write",
-        )
-        self._approvals.add_approval(
-            approval,
-            Event.create(
-                agent_run.project_id,
-                EventType.APPROVAL_CREATED,
-                {
-                    "approval_id": approval.id,
-                    "artifact_id": artifact.id,
-                    "action": approval.action,
-                    "path": result.metadata.get("path"),
-                },
-                agent_run.run_id,
-            ),
-        )
-        mode = (
-            self._approval_policy.get_text_file_write_approval_mode()
-            if self._approval_policy is not None
-            else "ask_each_time"
-        )
-        if mode == "reject_text_file_writes":
-            rejected = approval.reject()
-            self._approvals.update_approval(
-                rejected,
-                [
-                    Event.create(
-                        agent_run.project_id,
-                        EventType.APPROVAL_REJECTED,
-                        {"approval_id": approval.id, "artifact_id": approval.artifact_id},
-                        agent_run.run_id,
-                    )
-                ],
-            )
-            self._append_conversation(
-                agent_run,
-                ConversationRole.EVENT,
-                "Approval rejected by policy",
-                "Rejected workspace.apply_text_file_write by the current approval policy.",
-                artifact.id,
-            )
-            return rejected
-        if mode == "auto_apply_text_file_writes":
-            return self._auto_apply_approval(agent_run, request, approval)
-        return approval
-
-    def _auto_apply_approval(
-        self,
-        agent_run: AgentRun,
-        proposal_request: ToolRequest,
-        approval: Approval,
-    ) -> Approval:
-        if self._tool_broker is None:
-            return approval
-        project = self._runs.get_project(agent_run.project_id)
-        path = proposal_request.input.get("path")
-        content = proposal_request.input.get("content")
-        if not isinstance(path, str) or not isinstance(content, str):
-            return approval
-        apply_request = ToolRequest(
-            "workspace.apply_text_file_write",
-            {
-                "path": path,
-                "content": content,
-                "proposal_artifact_id": approval.artifact_id,
-                "approval_id": approval.id,
-            },
-        )
-        result = self._tool_broker.execute(project, agent_run, apply_request)
-        result_artifact = self._put_apply_artifact(approval, apply_request, result, error=None)
-        applied = approval.apply(result_artifact.id)
-        self._approvals.update_approval(
-            applied,
-            [
-                Event.create(
-                    approval.project_id,
-                    EventType.APPROVAL_APPLIED,
-                    {
-                        "approval_id": approval.id,
-                        "artifact_id": approval.artifact_id,
-                        "result_artifact_id": result_artifact.id,
-                        "mode": "auto_apply_text_file_writes",
-                    },
-                    approval.run_id,
-                )
-            ],
-        )
-        self._append_conversation(
-            agent_run,
-            ConversationRole.EVENT,
-            "Approval auto-applied",
-            f"Auto-applied {approval.action} for {path}.",
-            result_artifact.id,
-        )
-        return applied
-
-    def _put_apply_artifact(
-        self,
-        approval: Approval,
-        request: ToolRequest,
-        result: ToolExecutionResult,
-        error: str | None,
-    ) -> ArtifactMetadata:
-        content = {
-            "request": _tool_request_without_content(request),
-            "approval_id": approval.id,
-            "proposal_artifact_id": approval.artifact_id,
-            "result": None if result is None else {"content": result.content, "metadata": result.metadata},
-            "error": error,
-        }
-        return self._artifacts.put_text(
-            project_id=approval.project_id,
-            run_id=approval.run_id,
-            kind="tool.execution",
-            name=f"approved-apply-{approval.id}.json",
-            content=json.dumps(content, indent=2, sort_keys=True),
-        )
 
     def _pause_agent_for_approval(self, task: Task, agent_run: AgentRun, content: str) -> None:
         waiting_agent = agent_run.transition(RunStatus.WAITING)
@@ -1077,13 +935,20 @@ def _child_assignment_context(
     conversation_history: Sequence[ConversationEntry] = (),
 ) -> str:
     lines = [
+        "Subagent harness",
+        "",
+        "You are the coding worker for an autonomous, durable Rorven project run.",
+        "You were tasked by the project orchestrator with a scoped piece of work.",
+        "Use your brokered tools to complete that work: inspect the workspace, read",
+        "relevant files, write text files when the task requires it, run bounded CLI",
+        "commands for evidence or verification, and report back with what changed.",
+        "",
         f"Project: {project.name}",
         f"Workspace root: {project.workspace.workspace_root}",
-        f"User request: {run.command}",
         "",
-        f"Assigned task: {task}",
+        f"Orchestrator assignment: {task}",
         "",
-        "Recent project chat context:",
+        "Recent user/orchestrator context:",
     ]
     if conversation_history:
         for entry in conversation_history[-6:]:
@@ -1093,7 +958,7 @@ def _child_assignment_context(
     lines.extend(
         [
             "",
-            "Use brokered workspace tools for evidence. If a file change is needed, propose it through the write tool and wait for approval unless policy auto-applies it. Do not claim a file exists unless a tool result or approval result proves it.",
+            "Report back with: completed changes, files touched, CLI commands run, evidence observed, and anything blocked. Do not claim work that your tool results do not prove.",
         ]
     )
     return "\n".join(lines)

@@ -54,15 +54,15 @@ risks:
   - id: R-014
     title: Model-backed subagents are mistaken for tool-capable agents
     severity: high
-    mitigation: keep prompts explicit that this slice has brokered inspection tools, proposal-only diffs, approved text-file applies, and bounded shell commands only; implement sandbox policy and broader mutable tool audit before allowing code-changing claims
+    mitigation: keep prompts explicit that this slice has brokered inspection tools, direct text-file writes, and bounded shell commands only; implement sandbox policy and broader mutable tool audit before allowing broader code-changing claims
   - id: R-015
     title: No worker task execution loop means projects silently queue without progressing
     severity: high
     mitigation: API starts an embedded local worker supervisor by default; standalone worker remains available for production process isolation
   - id: R-016
-    title: Approved local workspace apply lacks sandbox and recovery hardening
+    title: Direct local workspace writes lack sandbox and recovery hardening
     severity: high
-    mitigation: keep apply behind explicit approval records; add idempotency keys, interrupted-apply recovery tests, and sandbox isolation before expanding mutable tools
+    mitigation: keep direct writes scoped and policy checked; add idempotency keys, interrupted-write recovery tests, and sandbox isolation before expanding mutable tools
   - id: R-017
     title: Root project-management tools execute from model-requested actions
     severity: high

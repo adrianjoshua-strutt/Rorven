@@ -2,26 +2,25 @@
 
 ## Implemented Slice
 
-1. Extend tool policy support for proposal-only text writes.
-2. Extend the local workspace broker with unified-diff proposals.
-3. Teach prompts that write proposals are not applied edits.
-4. Add adapter and worker tests proving no mutation occurs.
-5. Add durable approval records for proposed text-file writes.
-6. Add approved API application through the workspace broker.
-7. Add durable agent transcript entries for user messages, assignments, tool
+1. Extend tool policy support for direct workspace text writes.
+2. Extend the local workspace broker with `workspace.write_text_file`.
+3. Teach prompts that subagents are autonomous coding workers that should inspect,
+   edit, run bounded CLI commands, verify, and report.
+4. Add adapter, worker, and API tests proving direct mutation occurs only inside
+   the workspace.
+5. Keep durable agent transcript entries for user messages, assignments, tool
    results, approvals, and final answers.
-8. Add console approval ingestion and approve/reject controls in the subagent
-   work view.
-9. Add an API-managed local worker supervisor so local project chat progresses
+6. Add an API-managed local worker supervisor so local project chat progresses
    without manually starting a separate worker process.
-10. Allow child agents to use bounded multi-round workspace tools, so they can
-    inspect files before proposing text changes.
-11. Render project chat as root user/orchestrator turns and surface subagent
-    work as inspectable returned work instead of blending assignments into the
-    main conversation.
+7. Allow child agents to use bounded multi-round workspace tools, so they can
+   inspect files, edit files, run CLI commands, and verify work.
+8. Render project chat as root user/orchestrator turns and compact subagent
+   status messages; keep full subagent harness and transcript in the inspectable
+   subagent work view.
 
 ## Next Slices
 
-1. Add idempotency keys and recovery tests for interrupted apply operations.
-2. Add sandbox isolation around apply.
-3. Add multi-file patch proposals only after approval and recovery semantics are proven.
+1. Add idempotency keys and recovery tests for interrupted writes.
+2. Add sandbox isolation around mutable tools and shell commands.
+3. Add broader command approval policy for risky CLI operations.
+4. Add atomic multi-file patch support after recovery semantics are proven.

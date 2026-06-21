@@ -30,7 +30,7 @@ current_decisions:
   secret_delivery: brokered-tools-first
   tool_abstraction: ToolBroker
   tool_policy_abstraction: ToolPolicy
-  initial_tool_adapter: local-workspace-inspection-proposals-approved-text-writes-and-bounded-shell
+  initial_tool_adapter: local-workspace-inspection-direct-text-writes-and-bounded-shell
   approval_abstraction: ApprovalRepository
   initial_approval_adapter: local-file-store-state-json
   workspace_provisioning_abstraction: WorkspaceProvisioner
@@ -88,15 +88,13 @@ known_issues:
     title: workspace tools are useful but not sandboxed
     description: >
       Child agents can request bounded multi-round policy-checked workspace
-      inspection tools, text-file write proposals, approved text-file applies,
-      and workspace-scoped shell commands. Successful write proposals create
-      pending approval records unless a standing approval policy applies. The
-      local apply and bounded shell adapters are not sandboxed and do not yet
-      have full idempotency, interrupted-apply recovery, or risky-command
-      approval coverage. Safe diagnostics such as ping may run through the
-      bounded shell policy, but agents still cannot use git writes, access the
-      browser, fetch from network services, install packages, or retrieve
-      secrets.
-    remediation: Add idempotency keys, recovery tests, and sandboxed apply before
-      expanding mutable tools; add command approval policy before risky shell commands.
+      inspection tools, direct UTF-8 text-file writes, and workspace-scoped shell
+      commands. The local write and bounded shell adapters are not sandboxed and
+      do not yet have full idempotency, interrupted-write recovery, or
+      risky-command approval coverage. Safe diagnostics such as ping may run
+      through the bounded shell policy, but agents still cannot use git writes,
+      access the browser, fetch from network services, install packages, or
+      retrieve secrets.
+    remediation: Add idempotency keys, recovery tests, and sandboxed writes
+      before expanding mutable tools; add command approval policy before risky shell commands.
 last_updated: '2026-06-21'

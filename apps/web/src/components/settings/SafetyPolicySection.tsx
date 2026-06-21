@@ -53,7 +53,7 @@ export function SafetyPolicySection({
       <div className="approval-policy-control" aria-label="Text file write approval policy">
         <div>
           <strong>Text file write approvals</strong>
-          <span>Choose how brokered text-file write proposals are handled.</span>
+          <span>Legacy setting retained for existing local state.</span>
         </div>
         <div className="approval-policy-options">
           {modes.map((mode) => (

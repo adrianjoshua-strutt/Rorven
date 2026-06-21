@@ -125,9 +125,9 @@ function buildSubagentTimeline(
       id: `${agent.id}-started`,
       side: "orchestrator",
       title: statusTitle,
-      body: compactSummary(
-        assignment?.body ||
-          `${agent.definition.name} was started by the project orchestrator for this request.`,
+      body: subagentTimelineSummary(
+        agent.definition.name,
+        assignment?.body,
       ),
       time: assignment?.created_at ?? agent.created_at,
       status: agent.status,
@@ -216,6 +216,23 @@ function summarizeApprovalProposal(approval: ApprovalRecord, artifact?: Artifact
   } catch {
     return fallback;
   }
+}
+
+function subagentTimelineSummary(agentName: string, assignmentBody?: string): string {
+  const assignment = extractHarnessValue(assignmentBody ?? "", "Orchestrator assignment");
+  if (assignment) {
+    return `${agentName} is working on: ${assignment}`;
+  }
+  return `${agentName} was started by the project orchestrator.`;
+}
+
+function extractHarnessValue(body: string, label: string): string | null {
+  const line = body
+    .split(/\r?\n/)
+    .find((candidate) => candidate.trim().toLowerCase().startsWith(`${label.toLowerCase()}:`));
+  if (!line) return null;
+  const value = line.slice(line.indexOf(":") + 1).trim();
+  return value || null;
 }
 
 export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWorkEntry[] {

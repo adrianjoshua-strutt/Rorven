@@ -10,7 +10,7 @@ from rorven.adapters.persistence import LocalFilePlatformStore
 from rorven.adapters.runtime.langgraph import LangGraphAgentRuntime
 from rorven.adapters.tools import LocalWorkspaceToolBroker
 from rorven.application.modeling import ModelRequest, ModelResponse
-from rorven.application.services import ApprovalService, ProjectService, WorkerService
+from rorven.application.services import ProjectService, WorkerService
 from rorven.application.tools import WorkspaceReadPolicy
 
 
@@ -312,7 +312,7 @@ class LocalFileStoreTests(unittest.TestCase):
         gateway = ScriptedModelGateway(
             [
                 '{"action":"answer","content":"I will remember README.md should say test."}',
-                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Create the requested file proposal."}]}',
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Create the requested file."}]}',
                 '{"action":"final","content":"Proposed README.md with the remembered content."}',
                 "Summary confirms README.md with test content.",
             ]
@@ -347,9 +347,9 @@ class LocalFileStoreTests(unittest.TestCase):
         assignment_artifact = next(
             content
             for content in project_state.artifact_contents.values()
-            if "Assigned task: Create the requested file proposal." in content
+            if "Orchestrator assignment: Create the requested file." in content
         )
-        self.assertIn("Recent project chat context:", assignment_artifact)
+        self.assertIn("Recent user/orchestrator context:", assignment_artifact)
         self.assertIn('User: the file is README.md and it should say "test"', assignment_artifact)
         child_runs = [
             agent_run for agent_run in project_state.agent_runs
@@ -411,8 +411,8 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertIn("tool.requested", event_types)
         self.assertIn("tool.completed", event_types)
 
-    def test_child_agent_can_propose_file_write_without_applying_it(self) -> None:
-        root = Path("test-output") / "tests" / f"local-store-proposal-{uuid4()}"
+    def test_child_agent_can_write_file_directly(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-direct-write-{uuid4()}"
         workspace = root / "workspace"
         workspace.mkdir(parents=True, exist_ok=True)
         readme = workspace / "README.md"
@@ -432,10 +432,11 @@ class LocalFileStoreTests(unittest.TestCase):
                 '{"action":"dispatch","subagents":[{"name":"implementer","task":"Propose README update."}]}',
                 (
                     '{"action":"tool_calls","tool_calls":['
-                    '{"name":"workspace.propose_text_file_write",'
+                    '{"name":"workspace.write_text_file",'
                     '"input":{"path":"README.md","content":"After\\n"}}'
                     "]} "
                 ),
+                '{"action":"final","content":"Wrote README.md with the requested content."}',
                 "Summary includes applied README change.",
             ]
         )
@@ -459,48 +460,17 @@ class LocalFileStoreTests(unittest.TestCase):
         finished_state = projects.get_run_state(project.id, run_state.run.id)
         artifact_text = "\n".join(finished_state.artifact_contents.values())
 
-        self.assertEqual("waiting", finished_state.run.status.value)
+        self.assertEqual("completed", finished_state.run.status.value)
         child_statuses = {
             agent.definition.name: agent.status.value for agent in finished_state.agent_runs
         }
-        self.assertEqual("waiting", child_statuses["implementer"])
-        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
-        self.assertEqual(1, len(finished_state.approvals))
-        self.assertEqual("pending", finished_state.approvals[0].status.value)
-        self.assertIn("workspace.propose_text_file_write", artifact_text)
-        self.assertIn("--- a/README.md", artifact_text)
-        self.assertIn("+After", artifact_text)
-        self.assertIn('"applied": false', artifact_text)
-
-        approvals = ApprovalService(
-            runs=store,
-            approvals=store,
-            artifacts=store,
-            tool_broker=LocalWorkspaceToolBroker(),
-            conversations=store,
-            worker=worker,
-        )
-        applied = approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
-        after_approval_state = projects.get_run_state(project.id, run_state.run.id)
-
-        self.assertEqual("applied", applied.status.value)
-        self.assertEqual("completed", after_approval_state.run.status.value)
+        self.assertEqual("completed", child_statuses["implementer"])
         self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
-        self.assertEqual("applied", after_approval_state.approvals[0].status.value)
-        self.assertIn(
-            "Approval applied",
-            [entry.title for entry in after_approval_state.conversation_entries],
-        )
-        self.assertIn(
-            "approval.created",
-            [event.type.value for event in after_approval_state.events],
-        )
-        self.assertIn(
-            "approval.applied",
-            [event.type.value for event in after_approval_state.events],
-        )
+        self.assertEqual([], list(finished_state.approvals))
+        self.assertIn("workspace.write_text_file", artifact_text)
+        self.assertIn('"applied": true', artifact_text)
 
-    def test_child_agent_can_read_then_propose_across_tool_rounds(self) -> None:
+    def test_child_agent_can_read_then_write_across_tool_rounds(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-tool-loop-{uuid4()}"
         workspace = root / "workspace"
         workspace.mkdir(parents=True, exist_ok=True)
@@ -518,7 +488,7 @@ class LocalFileStoreTests(unittest.TestCase):
         )
         gateway = ScriptedModelGateway(
             [
-                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then propose an update."}]}',
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then write the update."}]}',
                 (
                     '{"action":"tool_calls","tool_calls":['
                     '{"name":"workspace.read_text_file","input":{"path":"README.md","max_bytes":2000}}'
@@ -526,11 +496,12 @@ class LocalFileStoreTests(unittest.TestCase):
                 ),
                 (
                     '{"action":"tool_calls","tool_calls":['
-                    '{"name":"workspace.propose_text_file_write",'
+                    '{"name":"workspace.write_text_file",'
                     '"input":{"path":"README.md","content":"Before\\nAfter\\n"}}'
                     "]} "
                 ),
-                "Summary includes the proposed README change.",
+                '{"action":"final","content":"Updated README.md after reading the existing content."}',
+                "Summary includes the applied README change.",
             ]
         )
         worker = WorkerService(
@@ -554,32 +525,19 @@ class LocalFileStoreTests(unittest.TestCase):
         artifact_text = "\n".join(finished_state.artifact_contents.values())
         event_types = [event.type.value for event in finished_state.events]
 
-        self.assertEqual("waiting", finished_state.run.status.value)
-        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
-        self.assertEqual(1, len(finished_state.approvals))
+        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
+        self.assertEqual([], list(finished_state.approvals))
         self.assertGreaterEqual(event_types.count("tool.completed"), 2)
         self.assertIn("Before", artifact_text)
-        self.assertIn("+After", artifact_text)
-        self.assertIn("Waiting for approval", "\n".join(entry.title for entry in finished_state.conversation_entries))
+        self.assertIn("workspace.write_text_file", artifact_text)
 
-        approvals = ApprovalService(
-            runs=store,
-            approvals=store,
-            artifacts=store,
-            tool_broker=LocalWorkspaceToolBroker(),
-            conversations=store,
-            worker=worker,
-        )
-        approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
-        self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
-
-    def test_auto_approved_write_completes_with_applied_summary_not_raw_tool_json(self) -> None:
-        root = Path("test-output") / "tests" / f"local-store-auto-apply-{uuid4()}"
+    def test_direct_write_completes_with_applied_summary_not_raw_tool_json(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-write-{uuid4()}"
         workspace = root / "workspace"
         workspace.mkdir(parents=True, exist_ok=True)
         todo = workspace / "todo.html"
         store = LocalFilePlatformStore(root / "state")
-        store.set_text_file_write_approval_mode("auto_apply_text_file_writes")
         projects = ProjectService(
             runs=store,
             events=store,
@@ -594,7 +552,7 @@ class LocalFileStoreTests(unittest.TestCase):
                 '{"action":"dispatch","subagents":[{"name":"implementer","task":"Create todo.html with localStorage."}]}',
                 (
                     '{"action":"tool_calls","tool_calls":['
-                    '{"name":"workspace.propose_text_file_write",'
+                    '{"name":"workspace.write_text_file",'
                     '"input":{"path":"todo.html","content":"<html><body><script>localStorage.setItem(\\\"ok\\\",\\\"1\\\")</script></body></html>\\n"}}'
                     "]} "
                 ),
@@ -612,7 +570,6 @@ class LocalFileStoreTests(unittest.TestCase):
             conversations=store,
             tool_policy=WorkspaceReadPolicy(),
             tool_broker=LocalWorkspaceToolBroker(),
-            approval_policy=store,
         )
 
         project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
@@ -629,7 +586,7 @@ class LocalFileStoreTests(unittest.TestCase):
 
         self.assertEqual("completed", finished_state.run.status.value)
         self.assertTrue(todo.exists())
-        self.assertEqual("applied", finished_state.approvals[0].status.value)
+        self.assertEqual([], list(finished_state.approvals))
         self.assertIn("Applied todo.html with localStorage support.", assistant_entries)
         self.assertFalse(any('"action":"tool_calls"' in body for body in assistant_entries))
 

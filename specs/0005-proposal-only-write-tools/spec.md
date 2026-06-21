@@ -1,54 +1,61 @@
-# Proposal-Only Write Tools
+# Direct Workspace Tools
 
 Status: active
 
 ## Goal
 
-Child agents can propose text-file changes through the tool broker without applying
-them. The proposal is persisted as a unified diff artifact for inspection and later
-approval/apply flows.
+Child agents can complete scoped workspace work through brokered tools. The
+current toolbox supports workspace inspection, text-file writes, and bounded CLI
+commands without giving agents ambient machine access.
 
 ## Requirements
 
-- Extend the existing `ToolBroker` and `ToolPolicy` ports; do not add direct
-  filesystem access to agents.
-- Add `workspace.propose_text_file_write`.
-- Restrict proposal tools to child agents.
-- Confine proposal paths to the project workspace root.
+- Extend the existing `ToolBroker` and `ToolPolicy` ports; agents must still use
+  brokered capabilities rather than direct filesystem or process access.
+- Add `workspace.write_text_file`.
+- Keep `workspace.list_files`, `workspace.read_text_file`, and
+  `workspace.run_shell_command` available to child agents.
+- Restrict workspace tools to child agents.
+- Confine paths and command working directories to the project workspace root.
 - Deny obvious secret paths.
-- Limit proposed text size.
-- Return a unified diff artifact and metadata with `applied: false`.
-- Prove the workspace file is not mutated.
+- Limit text-write size.
+- Write UTF-8 text files directly after policy evaluation.
+- Create parent directories for text writes when needed.
+- Persist tool request, policy decision, result metadata, and captured output as
+  artifacts.
+- Run bounded CLI commands inside the workspace with sanitized environment,
+  timeout caps, captured output, and command-pattern denies for obvious
+  destructive, install, network-fetch, and secret-sensitive operations.
 
 ## Non-Goals
 
-- Applying changes.
-- Arbitrary shell, git, browser, network, or external service tools.
+- Arbitrary shell, git writes, browser, package installation, network-fetch, or
+  external service tools.
 - Sandbox isolation.
-- Multi-file patch application.
+- Binary-file editing.
+- Destructive file operations.
+- Multi-file patch application as a single atomic patch.
 
 ## 2026-06-21 Extension
 
-By operator request, this slice now includes a bounded
-`workspace.run_shell_command` tool for child agents. It is exposed through the
-same `ToolBroker` and `ToolPolicy` ports, runs only inside the project
-workspace, strips secret-bearing environment variables, caps timeout, and denies
-obvious destructive, network-fetch, install, and secret-path commands. Safe
-diagnostic commands such as `ping` may run when policy accepts them. Risky
-command approval remains out of scope and is tracked separately.
+By operator request, proposal-only text writes are no longer the active child
+agent write path. `workspace.write_text_file` is the canonical text-file tool for
+child agents. Proposal/apply approval records may still exist in older local
+state, but new worker execution does not create text-file write proposals.
 
 ## Acceptance
 
-- Backend tests prove proposal diffs are generated and files remain unchanged.
-- Worker tests prove proposal artifacts are persisted in a run.
-- Worker tests prove successful proposals create pending approvals.
-- API tests prove approved proposal application mutates the target file only
-  after approval.
-- The web console displays pending proposal approvals in the producing subagent
-  work view and can approve or reject them through the API.
+- Backend tests prove direct text writes are confined to the workspace and mutate
+  the requested file.
+- Worker tests prove child agents can read, write, run multiple tool rounds, and
+  complete without approval dead-ends.
+- API tests prove the embedded worker can apply a child-agent text write
+  end-to-end.
 - Project and subagent conversations are rendered from durable transcript
   entries rather than reconstructed from only the selected run.
 - Child agents can run bounded workspace commands, including accepted safe
   diagnostics, through policy-checked shell execution without inheriting raw
   secrets.
+- The main project chat summarizes spawned subagents with compact messages while
+  the subagent work view exposes the full harness prompt and transcript.
 - Frontend build succeeds against the API contract.

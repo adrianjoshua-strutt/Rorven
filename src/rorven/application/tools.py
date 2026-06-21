@@ -10,17 +10,17 @@ from typing import Any
 from rorven.domain import AgentRun, Project
 
 
-MAX_TOOL_CALLS = 3
-MAX_TOOL_ROUNDS = 3
+MAX_TOOL_CALLS = 8
+MAX_TOOL_ROUNDS = 6
 MAX_READ_BYTES = 20_000
 MAX_LIST_ENTRIES = 200
 MAX_PROPOSED_TEXT_BYTES = 40_000
 MAX_COMMAND_CHARS = 500
 MAX_COMMAND_TIMEOUT_SECONDS = 30
 READ_ONLY_TOOLS = {"workspace.list_files", "workspace.read_text_file"}
-PROPOSAL_TOOLS = {"workspace.propose_text_file_write"}
+WRITE_TOOLS = {"workspace.write_text_file"}
 COMMAND_TOOLS = {"workspace.run_shell_command"}
-SUPPORTED_TOOLS = READ_ONLY_TOOLS | PROPOSAL_TOOLS | COMMAND_TOOLS
+SUPPORTED_TOOLS = READ_ONLY_TOOLS | WRITE_TOOLS | COMMAND_TOOLS
 SENSITIVE_PATH_MARKERS = (
     ".env",
     ".git",
@@ -116,7 +116,7 @@ class WorkspaceReadPolicy:
             max_entries = request.input.get("max_entries", MAX_LIST_ENTRIES)
             if not isinstance(max_entries, int) or max_entries < 1 or max_entries > MAX_LIST_ENTRIES:
                 return ToolPolicyDecision(False, f"max_entries must be between 1 and {MAX_LIST_ENTRIES}")
-        if request.name == "workspace.propose_text_file_write":
+        if request.name == "workspace.write_text_file":
             content = request.input.get("content")
             if not isinstance(content, str):
                 return ToolPolicyDecision(False, "content must be a string")
@@ -161,6 +161,7 @@ class DenyAllToolPolicy:
 
 def agent_tool_contract() -> str:
     return (
+        "You are an autonomous coding subagent. Complete the assignment, not just plan it. "
         "You may either produce a final answer or request brokered workspace tools. "
         f"You may request up to {MAX_TOOL_ROUNDS} tool rounds, with at most "
         f"{MAX_TOOL_CALLS} tool calls in one round.\n\n"
@@ -170,19 +171,22 @@ def agent_tool_contract() -> str:
         '{"action":"tool_calls","tool_calls":[{"name":"workspace.list_files",'
         '"input":{"path":".","max_entries":80}},{"name":"workspace.read_text_file",'
         '"input":{"path":"README.md","max_bytes":6000}},'
-        '{"name":"workspace.propose_text_file_write","input":{"path":"README.md",'
-        '"content":"complete proposed file content"}},'
+        '{"name":"workspace.write_text_file","input":{"path":"README.md",'
+        '"content":"complete file content"}},'
         '{"name":"workspace.run_shell_command","input":{"command":"python -m pytest",'
         '"cwd":".","timeout_seconds":30}}]}\n\n'
-        "Allowed tools are workspace.list_files, workspace.read_text_file, and "
-        "workspace.propose_text_file_write, and workspace.run_shell_command. The write "
-        "tool only creates a persisted diff proposal; it does not modify files. The "
-        "shell command tool runs inside the project workspace with captured output and "
+        "Allowed tools are workspace.list_files, workspace.read_text_file, "
+        "workspace.write_text_file, and workspace.run_shell_command. Use them as a "
+        "toolbox: inspect the tree, read relevant files, create or edit text files, "
+        "run safe verification commands, then report the concrete result. "
+        "workspace.write_text_file creates parent directories as needed and writes "
+        "one complete UTF-8 text file inside the project workspace immediately after "
+        "policy evaluation. The shell command tool runs inside the project workspace with captured output and "
         "a short timeout, and policy blocks obvious destructive, package-install, "
         "network-fetch, and secret-sensitive commands. Safe diagnostic commands such "
         "as version checks or ping may be used when policy accepts them. Tools are policy checked, audited, "
         "and cannot access obvious secret paths such as .env, .git, key, token, or "
-        "credential files. Only claim workspace inspection, shell results, or proposed "
+        "credential files. Only claim workspace inspection, shell results, or applied "
         "edits when the tool results prove them."
     )
 

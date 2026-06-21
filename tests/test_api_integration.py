@@ -222,7 +222,7 @@ class ApiIntegrationTests(unittest.TestCase):
                     {
                         "message": {
                             "role": "assistant",
-                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then propose an update."}]}',
+                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Inspect README, then write an update."}]}',
                         }
                     }
                 ],
@@ -252,10 +252,22 @@ class ApiIntegrationTests(unittest.TestCase):
                             "role": "assistant",
                             "content": (
                                 '{"action":"tool_calls","tool_calls":['
-                                '{"name":"workspace.propose_text_file_write",'
+                                '{"name":"workspace.write_text_file",'
                                 '"input":{"path":"README.md","content":"Before\\nAfter\\n"}}'
                                 "]} "
                             ),
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"final","content":"Read and updated README.md."}',
                         }
                     }
                 ],
@@ -307,29 +319,19 @@ class ApiIntegrationTests(unittest.TestCase):
                     state_response = client.get(f"/projects/{project_id}/runs/{run_id}")
                     self.assertEqual(200, state_response.status_code)
                     state_payload = state_response.json()["run"]
-                    if state_payload["approvals"]:
+                    if state_payload["status"] == "completed":
                         break
                     sleep(0.05)
 
                 self.assertIsNotNone(state_payload)
-                self.assertEqual("waiting", state_payload["status"])
-                self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
-                self.assertEqual(1, len(state_payload["approvals"]))
-                artifact_text = "\n".join(artifact["content"] for artifact in state_payload["artifacts"])
-                self.assertIn("+After", artifact_text)
-                approval_id = state_payload["approvals"][0]["id"]
-
-                approve_response = client.post(
-                    f"/projects/{project_id}/runs/{run_id}/approvals/{approval_id}/approve"
-                )
-                self.assertEqual(200, approve_response.status_code)
-                self.assertEqual("applied", approve_response.json()["approval"]["status"])
+                self.assertEqual("completed", state_payload["status"])
                 self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
-                completed_payload = client.get(f"/projects/{project_id}/runs/{run_id}").json()["run"]
-                self.assertEqual("completed", completed_payload["status"])
+                self.assertEqual([], state_payload["approvals"])
+                artifact_text = "\n".join(artifact["content"] for artifact in state_payload["artifacts"])
+                self.assertIn("workspace.write_text_file", artifact_text)
 
-    def test_approval_endpoint_applies_proposed_workspace_write(self) -> None:
-        root = Path("test-output") / "tests" / f"api-approval-{uuid4()}"
+    def test_worker_work_once_directly_applies_workspace_write(self) -> None:
+        root = Path("test-output") / "tests" / f"api-direct-write-{uuid4()}"
         data_dir = root / "state"
         workspace = root / "workspace"
         workspace.mkdir(parents=True, exist_ok=True)
@@ -357,7 +359,7 @@ class ApiIntegrationTests(unittest.TestCase):
         project_id = project_response.json()["project"]["id"]
         run_response = client.post(
             f"/projects/{project_id}/runs",
-            json={"command": "Propose README update"},
+            json={"command": "Write README update"},
         )
         self.assertEqual(202, run_response.status_code)
         run_id = run_response.json()["run"]["id"]
@@ -368,7 +370,7 @@ class ApiIntegrationTests(unittest.TestCase):
                     {
                         "message": {
                             "role": "assistant",
-                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Propose README update."}]}',
+                            "content": '{"action":"dispatch","subagents":[{"name":"implementer","task":"Write README update."}]}',
                         }
                     }
                 ],
@@ -382,7 +384,7 @@ class ApiIntegrationTests(unittest.TestCase):
                             "role": "assistant",
                             "content": (
                                 '{"action":"tool_calls","tool_calls":['
-                                '{"name":"workspace.propose_text_file_write",'
+                                '{"name":"workspace.write_text_file",'
                                 '"input":{"path":"README.md","content":"After\\n"}}'
                                 "]} "
                             ),
@@ -397,7 +399,19 @@ class ApiIntegrationTests(unittest.TestCase):
                     {
                         "message": {
                             "role": "assistant",
-                            "content": "Summary includes applied proposal.",
+                            "content": '{"action":"final","content":"Wrote README.md."}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 7},
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Summary includes applied README update.",
                         }
                     }
                 ],
@@ -412,24 +426,10 @@ class ApiIntegrationTests(unittest.TestCase):
             self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
             self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
 
-            approvals_response = client.get(f"/projects/{project_id}/runs/{run_id}/approvals")
-            self.assertEqual(200, approvals_response.status_code)
-            approvals = approvals_response.json()["approvals"]
-            self.assertEqual(1, len(approvals))
-            self.assertEqual("pending", approvals[0]["status"])
-            self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
-            waiting_response = client.get(f"/projects/{project_id}/runs/{run_id}")
-            self.assertEqual("waiting", waiting_response.json()["run"]["status"])
-
-            approve_response = client.post(
-                f"/projects/{project_id}/runs/{run_id}/approvals/{approvals[0]['id']}/approve"
-            )
-
-            self.assertEqual(200, approve_response.status_code)
-            self.assertEqual("applied", approve_response.json()["approval"]["status"])
             self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
             completed_response = client.get(f"/projects/{project_id}/runs/{run_id}")
             self.assertEqual("completed", completed_response.json()["run"]["status"])
+            self.assertEqual([], completed_response.json()["run"]["approvals"])
 
 
 if __name__ == "__main__":

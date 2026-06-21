@@ -26,6 +26,13 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertFalse(root_decision.allowed)
         self.assertFalse(secret_decision.allowed)
 
+        write_decision = policy.evaluate(
+            project,
+            child,
+            ToolRequest("workspace.write_text_file", {"path": "README.md", "content": "ok"}),
+        )
+        self.assertTrue(write_decision.allowed)
+
     def test_policy_allows_safe_command_and_blocks_destructive_command(self) -> None:
         project, child, _root = _project_and_agents()
         policy = WorkspaceReadPolicy()
@@ -93,7 +100,7 @@ class WorkspaceToolTests(unittest.TestCase):
                 ToolRequest("workspace.read_text_file", {"path": "../outside.txt"}),
             )
 
-    def test_local_workspace_broker_proposes_text_write_without_mutating_file(self) -> None:
+    def test_local_workspace_broker_writes_text_file_inside_workspace(self) -> None:
         project, child, _root = _project_and_agents()
         workspace = Path(project.workspace.workspace_root)
         workspace.mkdir(parents=True, exist_ok=True)
@@ -104,40 +111,14 @@ class WorkspaceToolTests(unittest.TestCase):
             project,
             child,
             ToolRequest(
-                "workspace.propose_text_file_write",
+                "workspace.write_text_file",
                 {"path": "README.md", "content": "After\n"},
             ),
         )
 
-        self.assertIn("--- a/README.md", result.content)
-        self.assertIn("+++ b/README.md", result.content)
-        self.assertIn("-Before", result.content)
-        self.assertIn("+After", result.content)
-        self.assertFalse(result.metadata["applied"])
-        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
-
-    def test_local_workspace_broker_applies_text_write_after_approval_path(self) -> None:
-        project, child, _root = _project_and_agents()
-        workspace = Path(project.workspace.workspace_root)
-        workspace.mkdir(parents=True, exist_ok=True)
-        readme = workspace / "README.md"
-        readme.write_text("Before\n", encoding="utf-8")
-
-        result = LocalWorkspaceToolBroker().execute(
-            project,
-            child,
-            ToolRequest(
-                "workspace.apply_text_file_write",
-                {
-                    "path": "README.md",
-                    "content": "After\n",
-                    "proposal_artifact_id": "22222222-2222-4222-8222-222222222222",
-                    "approval_id": "33333333-3333-4333-8333-333333333333",
-                },
-            ),
-        )
-
         self.assertTrue(result.metadata["applied"])
+        self.assertEqual("workspace.write_text_file", result.metadata["tool"])
+        self.assertEqual("README.md", result.metadata["path"])
         self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
 
     def test_local_workspace_broker_runs_shell_command_in_workspace(self) -> None:
