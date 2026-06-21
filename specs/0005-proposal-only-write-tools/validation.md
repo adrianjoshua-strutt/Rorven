@@ -284,7 +284,7 @@ Result: blocked in this environment while cleaning Playwright state with
 
 ## 2026-06-21 direct workspace tool follow-up evidence
 
-Validated implementation commit: pending commit.
+Validated implementation commit: `f0d481f`
 
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
