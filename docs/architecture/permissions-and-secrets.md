@@ -86,7 +86,7 @@ The first implemented tool slice is local read-only workspace inspection:
 - Git, browser, general network-fetch, and secret-bearing tools remain
   unavailable.
 
-## Root project provisioning
+## Root project control plane
 
 The root project may create and register local projects through a provider-neutral
 `project.create` root tool request. The model can request the action, but the
@@ -95,6 +95,13 @@ application layer validates the payload and executes it through the
 the configured workspace base root stored in project defaults. Changing that base
 is an operator settings action; root chat rejects project paths outside the
 configured base.
+
+The root project may also request provider-neutral read-only control-plane
+actions: `project.search`, `project.explain`, `project.summarize_all`,
+`system.health`, and `project.route`. These actions inspect persisted project,
+run, task, approval, artifact, conversation, worker-status, data-directory, and
+settings-presence metadata. They do not expose raw secrets, arbitrary workspace
+file access, shell execution, or project-scoped implementation authority.
 
 ## Redaction
 

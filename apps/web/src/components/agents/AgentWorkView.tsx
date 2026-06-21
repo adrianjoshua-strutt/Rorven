@@ -25,9 +25,9 @@ export function AgentWorkView({
       <AgentHeader title={agent.definition.name} subtitle="Subagent run" status={agent.status} onBack={onBack} />
 
       <div className="agent-work-meta">
+        <MetaTile label="Agent type" value={agent.definition.name} />
         <MetaTile label="Model profile" value={agent.definition.model_profile} />
-        <MetaTile label="Version" value={agent.definition.version} />
-        <MetaTile label="Run id" value={agent.id.slice(0, 8)} />
+        <MetaTile label="Run" value={agent.id.slice(0, 8)} />
       </div>
 
       <div className="agent-work-log">

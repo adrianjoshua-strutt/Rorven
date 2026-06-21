@@ -88,6 +88,10 @@ def orchestrator_summary_prompt(
         "the project conversation history to resolve missing-looking details before "
         "asking the user again. If an approval was applied, report the concrete applied "
         "result. If an approval was rejected, report that no change was made. Mention "
+        "If a child output only proposed a workspace write or requested a write tool, "
+        "say it is proposed or waiting for approval; do not say the file was created. "
+        "If a child output contains an unexecuted tool-call JSON object, say the tool "
+        "request did not complete and should be retried instead of claiming success. "
         "concrete next steps and avoid claiming tools were used if the child output did "
         "not prove it.\n\n"
         + "\n\n".join(child_outputs)

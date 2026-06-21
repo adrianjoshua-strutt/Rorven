@@ -358,6 +358,187 @@ class RootDashboardTests(unittest.TestCase):
         self.assertFalse(outside_root.exists())
         self.assertEqual([], client.get("/projects").json()["projects"])
 
+    def test_root_chat_searches_projects_by_indexed_content(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-search-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+        project = client.post(
+            "/projects",
+            json={
+                "name": "Todo Lab",
+                "allowed_root": "D:/projects",
+                "workspace_root": "D:/projects/todo-lab",
+            },
+        ).json()["project"]
+        self.assertEqual(
+            202,
+            client.post(f"/projects/{project['id']}/runs", json={"command": "Build localStorage todo app"}).status_code,
+        )
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '{"action":"tool_call","tool":{"name":"project.search","input":{"query":"localStorage"}}}',
+                        }
+                    }
+                ],
+                "model": "test/model",
+                "usage": {"total_tokens": 9},
+            },
+        ):
+            response = client.post("/root/messages", json={"message": "find the localStorage project"})
+
+        body = response.json()["root"]["messages"][-1]["body"]
+        self.assertIn("Todo Lab", body)
+        self.assertIn(f"#/projects/{project['id']}", body)
+
+    def test_root_chat_explains_and_routes_project_work(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-route-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+        project = client.post(
+            "/projects",
+            json={
+                "name": "Routing Target",
+                "allowed_root": "D:/projects",
+                "workspace_root": "D:/projects/routing-target",
+            },
+        ).json()["project"]
+        client.post(f"/projects/{project['id']}/runs", json={"command": "Implement a settings panel"})
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            side_effect=[
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": json.dumps(
+                                    {
+                                        "action": "tool_call",
+                                        "tool": {
+                                            "name": "project.explain",
+                                            "input": {"project_id": project["id"]},
+                                        },
+                                    }
+                                ),
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": json.dumps(
+                                    {
+                                        "action": "tool_call",
+                                        "tool": {
+                                            "name": "project.route",
+                                            "input": {"project_id": project["id"], "task": "add tests"},
+                                        },
+                                    }
+                                ),
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+            ],
+        ):
+            explain = client.post("/root/messages", json={"message": "what is Routing Target doing?"})
+            route = client.post("/root/messages", json={"message": "add tests to Routing Target"})
+
+        self.assertIn("Routing Target is active", explain.json()["root"]["messages"][-1]["body"])
+        route_body = route.json()["root"]["messages"][-1]["body"]
+        self.assertIn(f"#/projects/{project['id']}", route_body)
+        self.assertIn("Use Routing Target", route_body)
+
+    def test_root_chat_summarizes_projects_and_health(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"root-summary-health-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-key"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+        project = client.post(
+            "/projects",
+            json={
+                "name": "Health Project",
+                "allowed_root": "D:/projects",
+                "workspace_root": "D:/projects/health-project",
+            },
+        ).json()["project"]
+        client.post(f"/projects/{project['id']}/runs", json={"command": "Check health"})
+
+        with patch(
+            "rorven.adapters.model.openrouter.OpenRouterModelGateway._post_json",
+            side_effect=[
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": '{"action":"tool_call","tool":{"name":"project.summarize_all","input":{}}}',
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": '{"action":"tool_call","tool":{"name":"system.health","input":{}}}',
+                            }
+                        }
+                    ],
+                    "model": "test/model",
+                    "usage": {"total_tokens": 9},
+                },
+            ],
+        ):
+            summary = client.post("/root/messages", json={"message": "summarize all projects"})
+            health = client.post("/root/messages", json={"message": "system health"})
+
+        self.assertIn("Projects: 1 total", summary.json()["root"]["messages"][-1]["body"])
+        health_body = health.json()["root"]["messages"][-1]["body"]
+        self.assertIn("API: ready", health_body)
+        self.assertIn("Model config: credential configured", health_body)
+        self.assertIn("Queue:", health_body)
+
 
 if __name__ == "__main__":
     unittest.main()

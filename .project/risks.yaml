@@ -66,7 +66,7 @@ risks:
   - id: R-017
     title: Root project-management tools execute from model-requested actions
     severity: high
-    mitigation: require strict provider-neutral root tool contracts, validate payloads in the application layer, and keep filesystem effects scoped to configured operator settings
+    mitigation: require strict provider-neutral root tool contracts, validate payloads in the application layer, keep filesystem effects scoped to configured operator settings, and keep root control-plane actions read-only over persisted metadata except explicit project creation
   - id: R-018
     title: Embedded API worker and external worker can both lease tasks
     severity: medium

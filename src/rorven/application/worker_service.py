@@ -673,13 +673,17 @@ class WorkerService:
                 root.run_id,
             ),
         ]
+        prior_history = self._project_orchestrator_entries(root.project_id, exclude_run_id=root.run_id)
         for dispatch in decision.child_agents:
+            project = self._runs.get_project(root.project_id)
+            run = self._runs.get_run(root.project_id, root.run_id)
+            assignment_content = _child_assignment_context(project, run, dispatch.task, prior_history)
             assignment = self._artifacts.put_text(
                 project_id=root.project_id,
                 run_id=root.run_id,
                 kind="text.agent-assignment",
                 name=f"assign-{dispatch.definition.name}.txt",
-                content=dispatch.task,
+                content=assignment_content,
             )
             child = AgentRun.create(
                 run_id=root.run_id,
@@ -695,7 +699,7 @@ class WorkerService:
                 child,
                 ConversationRole.USER,
                 "Assignment",
-                dispatch.task,
+                assignment_content,
                 assignment.id,
             )
             events.append(
@@ -1064,3 +1068,32 @@ def _dispatch_summary(decision: OrchestratorDecision) -> str:
     if count == 1:
         return f"I spawned 1 subagent: {names}."
     return f"I spawned {count} subagents: {names}."
+
+
+def _child_assignment_context(
+    project: Project,
+    run: Run,
+    task: str,
+    conversation_history: Sequence[ConversationEntry] = (),
+) -> str:
+    lines = [
+        f"Project: {project.name}",
+        f"Workspace root: {project.workspace.workspace_root}",
+        f"User request: {run.command}",
+        "",
+        f"Assigned task: {task}",
+        "",
+        "Recent project chat context:",
+    ]
+    if conversation_history:
+        for entry in conversation_history[-6:]:
+            lines.append(f"- {_conversation_speaker(entry)}: {' '.join(entry.body.split())}")
+    else:
+        lines.append("- No prior user/orchestrator turns before this request.")
+    lines.extend(
+        [
+            "",
+            "Use brokered workspace tools for evidence. If a file change is needed, propose it through the write tool and wait for approval unless policy auto-applies it. Do not claim a file exists unless a tool result or approval result proves it.",
+        ]
+    )
+    return "\n".join(lines)

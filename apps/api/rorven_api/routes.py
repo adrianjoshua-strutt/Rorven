@@ -107,7 +107,18 @@ def register_routes(
     @app.post("/root/messages")
     def submit_root_message(request: RootMessageRequest) -> dict[str, Any]:
         try:
-            root_state = services.root.submit_message(request.message)
+            root_state = services.root.submit_message(
+                request.message,
+                system_context={
+                    "api": {"status": "ready"},
+                    "data_dir": str(services.data_dir),
+                    "worker": worker_status() if worker_status else None,
+                    "settings": read_settings(
+                        services.data_dir,
+                        worker_status=worker_status() if worker_status else None,
+                    ),
+                },
+            )
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Root orchestrator request failed: {exc}") from exc
         return {"root": root_state_to_api(root_state)}

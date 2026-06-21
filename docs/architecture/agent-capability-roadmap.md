@@ -13,6 +13,12 @@ runtime slice intentionally exposes only brokered workspace tools:
 This keeps the first write path auditable while approvals, persistence, and
 project chat history stabilize.
 
+The root project has a separate control-plane action contract. It can create or
+register projects, search persisted project records, explain one project,
+summarize all projects, report basic system health, and route project-scoped
+work into the correct project chat. It does not receive workspace shell or file
+tools.
+
 ## Required E2E agent tools
 
 To become a broad overnight-capable coding agent, Rorven needs additional

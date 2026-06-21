@@ -31,6 +31,20 @@ chat timeline while still allowing detailed inspection of each subagent run.
 
 The platform only creates child runs from a real orchestrator dispatch decision, not from hardcoded reviewer/implementer placeholders.
 
+## Root control plane
+
+The root project is a normal chat surface, but its actions are limited to
+installation-level control-plane work. It can request provider-neutral root
+actions for creating/registering projects, searching registered project records,
+explaining one project's current work, summarizing all projects, checking basic
+system health, and routing the operator into the right project chat.
+
+The root model selects an action through a JSON contract. The application layer
+executes the action against persisted project, run, task, approval, artifact,
+conversation, worker-status, data-directory, and settings-presence metadata.
+Project-scoped implementation work is routed to `#/projects/<id>` instead of
+being executed by the root project.
+
 An agent run contains:
 
 - project ID

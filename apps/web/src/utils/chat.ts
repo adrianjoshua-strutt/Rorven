@@ -60,6 +60,7 @@ function appendSelectedRunPlaceholder(
 ): void {
   if (!run) return;
   const root = run.agent_runs.find((agentRun) => agentRun.parent_agent_run_id === null);
+  if (!isDone(run.status)) return;
   const rootHasAssistantEntry = rootTranscript.some(
     (entry) => entry.run_id === run.id && entry.role === "assistant",
   );
@@ -310,8 +311,26 @@ function stripThinkBlocks(body: string): string {
 
 function parseProtocolJson(body: string): string | null {
   try {
-    const payload = JSON.parse(body) as { action?: unknown; content?: unknown };
-    return payload.action === "final" && typeof payload.content === "string" ? payload.content : null;
+    const payload = JSON.parse(body) as {
+      action?: unknown;
+      content?: unknown;
+      tool_calls?: { name?: unknown; input?: { path?: unknown; command?: unknown } }[];
+    };
+    if (payload.action === "final" && typeof payload.content === "string") {
+      return payload.content;
+    }
+    if (payload.action === "tool_calls" && Array.isArray(payload.tool_calls)) {
+      const calls = payload.tool_calls
+        .map((call) => {
+          const name = typeof call.name === "string" ? call.name : "workspace tool";
+          const path = typeof call.input?.path === "string" ? ` for ${normalizeDisplayPath(call.input.path)}` : "";
+          const command = typeof call.input?.command === "string" ? `: ${call.input.command}` : "";
+          return `${name}${path}${command}`;
+        })
+        .join(", ");
+      return calls ? `Requested brokered tool work: ${calls}.` : "Requested brokered tool work.";
+    }
+    return null;
   } catch {
     return null;
   }

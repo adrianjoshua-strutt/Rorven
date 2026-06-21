@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 import re
-from typing import Sequence
 
 from rorven.application.modeling import ModelMessage, ModelRequest
 from rorven.application.ports import (
@@ -424,7 +425,11 @@ class RootService:
         messages = self._filtered_root_messages()
         return RootDashboardState(messages=messages, activities=[])
 
-    def submit_message(self, message: str) -> RootDashboardState:
+    def submit_message(
+        self,
+        message: str,
+        system_context: Mapping[str, object] | None = None,
+    ) -> RootDashboardState:
         prior_messages = self._filtered_root_messages()[-MAX_ROOT_HISTORY_MESSAGES:]
         user_message = {
             "id": f"root-user-{len(self._root_messages.list_root_messages()) + 1}",
@@ -459,7 +464,7 @@ class RootService:
             )
         )
         instruction = _parse_root_instruction(response.content)
-        body = self._execute_root_instruction(instruction)
+        body = self._execute_root_instruction(instruction, system_context or {})
         assistant_message = {
             "id": f"root-orchestrator-{len(self._root_messages.list_root_messages()) + 1}",
             "side": "orchestrator",
@@ -470,16 +475,35 @@ class RootService:
         self._root_messages.append_root_message(assistant_message)
         return RootDashboardState(messages=self._filtered_root_messages(), activities=[])
 
-    def _execute_root_instruction(self, instruction: "_RootInstruction") -> str:
+    def _execute_root_instruction(
+        self,
+        instruction: "_RootInstruction",
+        system_context: Mapping[str, object],
+    ) -> str:
         if instruction.action in {"answer", "ask"}:
             return _normalize_root_response(instruction.content or "")
-        if instruction.action != "tool_call" or instruction.tool_name != "project.create":
+        if instruction.action != "tool_call":
             return "I cannot perform that root project action yet."
+        if instruction.tool_name == "project.create":
+            return self._create_project_from_root_tool(instruction.tool_input)
+        if instruction.tool_name == "project.search":
+            return self._search_projects_from_root_tool(instruction.tool_input)
+        if instruction.tool_name == "project.explain":
+            return self._explain_project_from_root_tool(instruction.tool_input)
+        if instruction.tool_name == "project.summarize_all":
+            return self._summarize_projects_from_root_tool()
+        if instruction.tool_name == "system.health":
+            return self._system_health_from_root_tool(system_context)
+        if instruction.tool_name == "project.route":
+            return self._route_project_from_root_tool(instruction.tool_input)
+        return "I cannot perform that root project action yet."
+
+    def _create_project_from_root_tool(self, tool_input: Mapping[str, object]) -> str:
         base_root = Path(self._project_defaults.get_workspace_base_root()).resolve()
-        name = instruction.tool_input.get("name")
+        name = tool_input.get("name")
         if not isinstance(name, str) or not name.strip():
             return f"What should the project be called? I will place it under {base_root}."
-        requested_root = instruction.tool_input.get("workspace_root")
+        requested_root = tool_input.get("workspace_root")
         if isinstance(requested_root, str) and requested_root.strip():
             workspace_root = Path(requested_root.strip())
             if not workspace_root.is_absolute():
@@ -498,6 +522,110 @@ class RootService:
         except ValueError as exc:
             return str(exc)
         return f"Created project {project.name} at {project.workspace.workspace_root}."
+
+    def _search_projects_from_root_tool(self, tool_input: Mapping[str, object]) -> str:
+        query = _string_value(tool_input.get("query")).lower()
+        status_filter = _string_value(tool_input.get("status")).lower()
+        states = self._project_states()
+        if status_filter:
+            states = [state for state in states if status_filter in _project_status_label(state)]
+        if query:
+            states = [state for state in states if query in _project_search_text(state)]
+        states = sorted(states, key=_project_last_activity, reverse=True)
+        if not states:
+            detail = f" matching {query!r}" if query else ""
+            return f"No projects found{detail}."
+        lines = ["Matching projects:"]
+        for state in states[:8]:
+            label = _project_status_label(state)
+            last = _project_last_activity(state).isoformat()
+            lines.append(
+                f"{state.project.name} ({label}) - {state.project.workspace.workspace_root} - last activity {last} - open #/projects/{state.project.id}"
+            )
+        if len(states) > 8:
+            lines.append(f"{len(states) - 8} more projects matched.")
+        return "\n".join(lines)
+
+    def _explain_project_from_root_tool(self, tool_input: Mapping[str, object]) -> str:
+        matches = self._resolve_project_states(tool_input)
+        if not matches:
+            return "I could not find a matching project."
+        if len(matches) > 1:
+            return _multiple_project_matches(matches)
+        return _format_project_explanation(matches[0])
+
+    def _summarize_projects_from_root_tool(self) -> str:
+        states = self._project_states()
+        if not states:
+            return "No projects are registered yet."
+        active = [state for state in states if _project_has_active_work(state)]
+        waiting = [state for state in states if any(approval.status == ApprovalStatus.PENDING for approval in state.approvals)]
+        failed = [state for state in states if any(run.status == RunStatus.FAILED for run in state.runs)]
+        stale_tasks = _stale_tasks(states)
+        recent = sorted(states, key=_project_last_activity, reverse=True)[:5]
+        lines = [
+            f"Projects: {len(states)} total, {len(active)} active, {len(waiting)} waiting for approval, {len(failed)} with failures.",
+            f"Stale leased tasks: {len(stale_tasks)}.",
+            "Recent activity:",
+        ]
+        for state in recent:
+            lines.append(f"{state.project.name}: {_project_status_label(state)} - open #/projects/{state.project.id}")
+        return "\n".join(lines)
+
+    def _system_health_from_root_tool(self, system_context: Mapping[str, object]) -> str:
+        states = self._project_states()
+        tasks = [task for state in states for task in state.tasks]
+        ready = len([task for task in tasks if task.status.value == "ready"])
+        leased = len([task for task in tasks if task.status.value == "leased"])
+        failed = len([task for task in tasks if task.status.value == "failed"])
+        stale = len(_stale_tasks(states))
+        worker = system_context.get("worker")
+        worker_line = _format_worker_health(worker)
+        settings = system_context.get("settings")
+        model_line = _format_model_health(settings)
+        data_dir = _string_value(system_context.get("data_dir")) or "unknown"
+        return "\n".join(
+            [
+                "API: ready.",
+                worker_line,
+                model_line,
+                f"Data store: {data_dir}.",
+                f"Queue: {ready} ready, {leased} leased, {failed} failed, {stale} stale leased.",
+            ]
+        )
+
+    def _route_project_from_root_tool(self, tool_input: Mapping[str, object]) -> str:
+        matches = self._resolve_project_states(tool_input)
+        if not matches:
+            return "I could not find the right project. Tell me the project name or ask me to create one."
+        if len(matches) > 1:
+            return _multiple_project_matches(matches)
+        state = matches[0]
+        task = _string_value(tool_input.get("task"))
+        suffix = f" For that task: {task}" if task else ""
+        return (
+            f"Use {state.project.name} for this. Open #/projects/{state.project.id} "
+            f"and send the request in that project chat.{suffix}"
+        )
+
+    def _resolve_project_states(self, tool_input: Mapping[str, object]) -> list[ProjectState]:
+        project_id = _string_value(tool_input.get("project_id"))
+        query = _string_value(tool_input.get("query")).lower()
+        states = self._project_states()
+        if project_id:
+            return [state for state in states if state.project.id == project_id]
+        if not query:
+            return states[:1]
+        return [state for state in states if query in _project_search_text(state)]
+
+    def _project_states(self) -> list[ProjectState]:
+        states: list[ProjectState] = []
+        for project in self._runs.list_projects():
+            try:
+                states.append(self._projects.get_project_state(project.id))
+            except KeyError:
+                continue
+        return states
 
     def _filtered_root_messages(self) -> list[dict[str, str]]:
         hidden_seed_bodies = {
@@ -520,7 +648,14 @@ class RootService:
                     "name": project.name,
                     "workspace_root": project.workspace.workspace_root,
                     "runs": len(runs),
-                    "active_runs": len([run for run in runs if run.status != RunStatus.COMPLETED]),
+                    "active_runs": len(
+                        [
+                            run
+                            for run in runs
+                            if run.status
+                            not in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELED}
+                        ]
+                    ),
                     "completed_runs": len([run for run in runs if run.status == RunStatus.COMPLETED]),
                 }
             )
@@ -536,7 +671,14 @@ def _root_system_prompt() -> str:
             'To answer normally: {"action":"answer","content":"plain chat text"}',
             'To ask for missing information: {"action":"ask","content":"plain question"}',
             'To create a project: {"action":"tool_call","tool":{"name":"project.create","input":{"name":"Project name","workspace_root":"optional relative or absolute path"}}}',
+            'To search projects: {"action":"tool_call","tool":{"name":"project.search","input":{"query":"name path status tag or content text","status":"optional status"}}}',
+            'To explain one project: {"action":"tool_call","tool":{"name":"project.explain","input":{"project_id":"optional id","query":"optional name or path"}}}',
+            'To summarize all projects: {"action":"tool_call","tool":{"name":"project.summarize_all","input":{}}}',
+            'To inspect Rorven system health: {"action":"tool_call","tool":{"name":"system.health","input":{}}}',
+            'To route project-scoped work: {"action":"tool_call","tool":{"name":"project.route","input":{"project_id":"optional id","query":"project name or path","task":"what the user wants done"}}}',
             "Use project.create only when the user clearly asks to create, add, register, or make a project.",
+            "Use project.route when the user asks the root project to solve a task that belongs inside an existing project.",
+            "Search uses registered project records, paths, run commands, conversations, artifacts, statuses, and tag-like text. Tags are not a separate first-class field yet.",
             "If the user asks to create a project without a name, ask for the name.",
             "If workspace_root is omitted, Rorven will place the project under the configured workspace base.",
             "Plain chat text must not use Markdown, headings, bullets, or code fences.",
@@ -685,4 +827,110 @@ def _is_inside(base_root: Path, workspace_root: Path) -> bool:
 
 
 def _current_iso() -> str:
-    return __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()
+    return datetime.now(UTC).isoformat()
+
+
+def _string_value(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _project_search_text(state: ProjectState) -> str:
+    parts = [
+        state.project.name,
+        state.project.workspace.workspace_root,
+        state.project.workspace.allowed_root,
+        _project_status_label(state),
+    ]
+    parts.extend(run.command for run in state.runs)
+    parts.extend(f"{entry.title} {entry.body}" for entry in state.conversation_entries)
+    parts.extend(state.artifact_contents.values())
+    return "\n".join(parts).lower()
+
+
+def _project_last_activity(state: ProjectState) -> datetime:
+    times = [state.project.created_at]
+    times.extend(run.created_at for run in state.runs)
+    times.extend(entry.created_at for entry in state.conversation_entries)
+    times.extend(approval.created_at for approval in state.approvals)
+    return max(times)
+
+
+def _project_status_label(state: ProjectState) -> str:
+    if any(approval.status == ApprovalStatus.PENDING for approval in state.approvals):
+        return "waiting approval"
+    if any(run.status in {RunStatus.CREATED, RunStatus.QUEUED, RunStatus.LEASED, RunStatus.STARTED, RunStatus.WAITING} for run in state.runs):
+        return "active"
+    if any(run.status == RunStatus.FAILED for run in state.runs):
+        return "failed"
+    if state.runs:
+        return "completed"
+    return "idle"
+
+
+def _project_has_active_work(state: ProjectState) -> bool:
+    return _project_status_label(state) in {"waiting approval", "active"}
+
+
+def _stale_tasks(states: Sequence[ProjectState]) -> list[Task]:
+    now = datetime.now(UTC)
+    return [
+        task
+        for state in states
+        for task in state.tasks
+        if task.status.value == "leased" and task.lease_expires_at is not None and task.lease_expires_at < now
+    ]
+
+
+def _format_project_explanation(state: ProjectState) -> str:
+    active_runs = [run for run in state.runs if run.status in {RunStatus.CREATED, RunStatus.QUEUED, RunStatus.LEASED, RunStatus.STARTED, RunStatus.WAITING}]
+    pending = [approval for approval in state.approvals if approval.status == ApprovalStatus.PENDING]
+    failed = [run for run in state.runs if run.status == RunStatus.FAILED]
+    latest_runs = sorted(state.runs, key=lambda run: run.created_at, reverse=True)[:3]
+    lines = [
+        f"{state.project.name} is {_project_status_label(state)}.",
+        f"Workspace: {state.project.workspace.workspace_root}.",
+        f"Open: #/projects/{state.project.id}.",
+        f"Runs: {len(state.runs)} total, {len(active_runs)} active, {len(failed)} failed.",
+        f"Waiting approvals: {len(pending)}.",
+    ]
+    if latest_runs:
+        lines.append("Recent runs:")
+        for run in latest_runs:
+            lines.append(f"{run.status.value}: {run.command}")
+    if state.conversation_entries:
+        latest = state.conversation_entries[-1]
+        lines.append(f"Latest message: {latest.title}: {' '.join(latest.body.split())[:180]}")
+    return "\n".join(lines)
+
+
+def _multiple_project_matches(states: Sequence[ProjectState]) -> str:
+    lines = ["I found multiple matching projects:"]
+    for state in list(states)[:8]:
+        lines.append(f"{state.project.name} - {state.project.workspace.workspace_root} - open #/projects/{state.project.id}")
+    return "\n".join(lines)
+
+
+def _format_worker_health(worker: object) -> str:
+    if not isinstance(worker, Mapping):
+        return "Worker: status unavailable."
+    running = worker.get("running")
+    completed = worker.get("completed_tasks")
+    last_error = worker.get("last_error")
+    line = f"Worker: {'running' if running else 'not running'}"
+    if completed is not None:
+        line += f", {completed} tasks completed"
+    if last_error:
+        line += f", last error: {last_error}"
+    return line + "."
+
+
+def _format_model_health(settings: object) -> str:
+    if not isinstance(settings, Mapping):
+        return "Model config: status unavailable."
+    credentials = settings.get("credentials")
+    profiles = settings.get("model_profiles")
+    configured = False
+    if isinstance(credentials, list):
+        configured = any(isinstance(item, Mapping) and item.get("configured") is True for item in credentials)
+    profile_count = len(profiles) if isinstance(profiles, list) else 0
+    return f"Model config: {'credential configured' if configured else 'credential missing'}, {profile_count} model profiles."

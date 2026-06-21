@@ -1,4 +1,5 @@
 import { Bot, Check, X, User } from "lucide-react";
+import { ReactNode } from "react";
 import { ApprovalRecord } from "../../api";
 import { ChatMessage } from "../../types";
 import { StatusPill } from "../status/StatusPill";
@@ -33,7 +34,7 @@ export function ChatBubble({
             <time>{new Date(item.time).toLocaleTimeString()}</time>
           </span>
         </div>
-        <p>{item.body}</p>
+        <p>{renderChatBody(item.body)}</p>
         {isPendingApproval && item.approval ? (
           <div className="approval-inline-actions">
             <button
@@ -66,4 +67,33 @@ export function ChatBubble({
       </div>
     </article>
   );
+}
+
+function renderChatBody(body: string) {
+  const lines = body.split(/\r?\n/);
+  const parts: ReactNode[] = [];
+  const routePattern = /#\/projects\/[A-Za-z0-9-]+(?:\/agents\/[A-Za-z0-9-]+)?/g;
+  for (const [lineIndex, line] of lines.entries()) {
+    let cursor = 0;
+    for (const match of line.matchAll(routePattern)) {
+      const route = match[0];
+      const index = match.index ?? 0;
+      if (index > cursor) {
+        parts.push(line.slice(cursor, index));
+      }
+      parts.push(
+        <a className="chat-route-link" href={route} key={`${lineIndex}-${index}`}>
+          {route}
+        </a>,
+      );
+      cursor = index + route.length;
+    }
+    if (cursor < line.length) {
+      parts.push(line.slice(cursor));
+    }
+    if (lineIndex < lines.length - 1) {
+      parts.push(<br key={`br-${lineIndex}`} />);
+    }
+  }
+  return parts;
 }

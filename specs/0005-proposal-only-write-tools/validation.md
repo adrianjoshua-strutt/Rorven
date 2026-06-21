@@ -237,3 +237,47 @@ npm.cmd run test:e2e
 Result: blocked in this environment. The elevated Playwright run was rejected,
 and the sandboxed run failed while cleaning Playwright state with
 `EPERM: operation not permitted, unlink 'apps/web/test-results/.last-run.json'`.
+
+## 2026-06-21 root control plane and protocol follow-up evidence
+
+Validated implementation commit: pending commit.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest tests.test_local_file_store.LocalFileStoreTests.test_child_and_summary_requests_receive_project_conversation_history tests.test_local_file_store.LocalFileStoreTests.test_auto_approved_write_completes_with_applied_summary_not_raw_tool_json tests.test_root_dashboard
+```
+
+Result: 12 tests passed.
+
+Coverage includes:
+
+- Root project actions for project search, project explanation, project routing,
+  all-project summary, and system health.
+- Child assignment artifacts include workspace root, current request, assigned
+  task, and recent project chat context.
+- Auto-approved text-file write proposals actually apply the workspace file and
+  complete with a normal assistant answer instead of raw `tool_calls` protocol
+  JSON.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover
+```
+
+Result: 60 tests passed.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: TypeScript and Vite build passed.
+
+```powershell
+cd apps/web
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5187'
+npm.cmd run test:e2e
+```
+
+Result: blocked in this environment while cleaning Playwright state with
+`EPERM: operation not permitted, unlink 'apps/web/test-results/.last-run.json'`.

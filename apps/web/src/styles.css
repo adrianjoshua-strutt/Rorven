@@ -467,6 +467,16 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
+.chat-route-link {
+  color: var(--teal);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.chat-route-link:hover {
+  text-decoration: underline;
+}
+
 .bubble-action {
   min-height: 30px;
   border: 1px solid var(--line);
@@ -914,11 +924,18 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  padding: 14px 18px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
 }
 
-.agent-work-meta div,
+.agent-work-meta div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--pane-3);
+  padding: 10px 12px;
+  display: block;
+}
+
 .work-entry {
   min-width: 0;
   border: 1px solid var(--line);

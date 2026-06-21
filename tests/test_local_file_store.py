@@ -344,6 +344,13 @@ class LocalFileStoreTests(unittest.TestCase):
         self.assertIn('User: the file is README.md and it should say "test"', summary_prompt)
         self.assertIn("Subagent message from implementer", summary_prompt)
         project_state = projects.get_project_state(project.id)
+        assignment_artifact = next(
+            content
+            for content in project_state.artifact_contents.values()
+            if "Assigned task: Create the requested file proposal." in content
+        )
+        self.assertIn("Recent project chat context:", assignment_artifact)
+        self.assertIn('User: the file is README.md and it should say "test"', assignment_artifact)
         child_runs = [
             agent_run for agent_run in project_state.agent_runs
             if agent_run.parent_agent_run_id is not None
@@ -565,6 +572,66 @@ class LocalFileStoreTests(unittest.TestCase):
         )
         approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
         self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
+
+    def test_auto_approved_write_completes_with_applied_summary_not_raw_tool_json(self) -> None:
+        root = Path("test-output") / "tests" / f"local-store-auto-apply-{uuid4()}"
+        workspace = root / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        todo = workspace / "todo.html"
+        store = LocalFilePlatformStore(root / "state")
+        store.set_text_file_write_approval_mode("auto_apply_text_file_writes")
+        projects = ProjectService(
+            runs=store,
+            events=store,
+            tasks=store,
+            runtime=LangGraphAgentRuntime(store),
+            artifacts=store,
+            approvals=store,
+            conversations=store,
+        )
+        gateway = ScriptedModelGateway(
+            [
+                '{"action":"dispatch","subagents":[{"name":"implementer","task":"Create todo.html with localStorage."}]}',
+                (
+                    '{"action":"tool_calls","tool_calls":['
+                    '{"name":"workspace.propose_text_file_write",'
+                    '"input":{"path":"todo.html","content":"<html><body><script>localStorage.setItem(\\\"ok\\\",\\\"1\\\")</script></body></html>\\n"}}'
+                    "]} "
+                ),
+                '{"action":"final","content":"Applied todo.html with localStorage support."}',
+                "The todo.html file was applied and is ready to test.",
+            ]
+        )
+        worker = WorkerService(
+            runs=store,
+            tasks=store,
+            artifacts=store,
+            events=store,
+            model_gateway=gateway,
+            approvals=store,
+            conversations=store,
+            tool_policy=WorkspaceReadPolicy(),
+            tool_broker=LocalWorkspaceToolBroker(),
+            approval_policy=store,
+        )
+
+        project = projects.create_project("Example", str(root.resolve()), str(workspace.resolve()))
+        run_state = projects.submit_task(project.id, "Create a localStorage todo app")
+
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        self.assertEqual(1, len(worker.work_once("test-worker", limit=1)))
+        finished_state = projects.get_run_state(project.id, run_state.run.id)
+        assistant_entries = [
+            entry.body
+            for entry in finished_state.conversation_entries
+            if entry.role.value == "assistant"
+        ]
+
+        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertTrue(todo.exists())
+        self.assertEqual("applied", finished_state.approvals[0].status.value)
+        self.assertIn("Applied todo.html with localStorage support.", assistant_entries)
+        self.assertFalse(any('"action":"tool_calls"' in body for body in assistant_entries))
 
     def test_projects_are_listed_newest_first_after_reopen(self) -> None:
         root = Path("test-output") / "tests" / f"local-store-order-{uuid4()}"
