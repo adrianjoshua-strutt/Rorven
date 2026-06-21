@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 
 from rorven.composition import LocalServices
 from rorven_api.schemas import (
+    ApprovalPolicySettingsRequest,
     CreateProjectRequest,
     ModelProfileSettingsRequest,
     ProjectDefaultsSettingsRequest,
@@ -68,6 +69,14 @@ def register_routes(
     def update_project_defaults(request: ProjectDefaultsSettingsRequest) -> dict[str, Any]:
         try:
             services.store.set_workspace_base_root(request.workspace_base_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}
+
+    @app.post("/settings/approval-policy")
+    def update_approval_policy(request: ApprovalPolicySettingsRequest) -> dict[str, Any]:
+        try:
+            services.store.set_text_file_write_approval_mode(request.text_file_write)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"settings": read_settings(services.data_dir, worker_status=worker_status() if worker_status else None)}

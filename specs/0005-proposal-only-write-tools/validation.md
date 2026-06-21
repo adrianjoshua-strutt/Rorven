@@ -105,4 +105,50 @@ built static app and local API with the embedded worker disabled.
 - No sandbox isolation for mutable actions exists yet.
 - Approved local text-file writes do not yet have full idempotency keys or
   interrupted-apply recovery tests.
-- No shell, git, browser, network, or external service tools.
+- Bounded workspace shell commands exist for child agents, but risky command
+  approval, arbitrary shell, git writes, browser, network, package installation,
+  and external service tools remain unavailable.
+
+## 2026-06-21 approval and command follow-up evidence
+
+Validated implementation commit: pending
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest tests.test_workspace_tools tests.test_api_settings tests.test_local_file_store.LocalFileStoreTests.test_child_agent_can_propose_file_write_without_applying_it tests.test_local_file_store.LocalFileStoreTests.test_child_agent_can_read_then_propose_across_tool_rounds
+```
+
+Result: 13 tests passed.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest tests.test_api_integration.ApiIntegrationTests.test_approval_endpoint_applies_proposed_workspace_write tests.test_api_integration.ApiIntegrationTests.test_embedded_worker_runs_subagent_tools_and_approval_flow
+```
+
+Result: 2 tests passed.
+
+```powershell
+$env:PYTHONPATH='.;src;apps/api;apps/worker'
+.venv\Scripts\python.exe -m unittest discover
+```
+
+Result: 52 tests passed.
+
+```powershell
+cd apps/web
+npm.cmd run build
+```
+
+Result: build passed.
+
+Coverage includes:
+
+- Pending approvals pause only the producing subagent and keep the project run
+  waiting instead of falsely completed.
+- Approval application resumes the waiting subagent and allows the project
+  orchestrator to summarize the applied result.
+- Project snapshots expose approvals and proposal artifacts for main-chat
+  rendering.
+- Settings persist text-file write approval policy.
+- Bounded workspace shell commands are policy checked and captured through the
+  tool broker.

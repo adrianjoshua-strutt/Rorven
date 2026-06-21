@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import re
 from typing import Any
 
 from rorven.domain import AgentRun, Project
@@ -14,9 +15,12 @@ MAX_TOOL_ROUNDS = 3
 MAX_READ_BYTES = 20_000
 MAX_LIST_ENTRIES = 200
 MAX_PROPOSED_TEXT_BYTES = 40_000
+MAX_COMMAND_CHARS = 500
+MAX_COMMAND_TIMEOUT_SECONDS = 30
 READ_ONLY_TOOLS = {"workspace.list_files", "workspace.read_text_file"}
 PROPOSAL_TOOLS = {"workspace.propose_text_file_write"}
-SUPPORTED_TOOLS = READ_ONLY_TOOLS | PROPOSAL_TOOLS
+COMMAND_TOOLS = {"workspace.run_shell_command"}
+SUPPORTED_TOOLS = READ_ONLY_TOOLS | PROPOSAL_TOOLS | COMMAND_TOOLS
 SENSITIVE_PATH_MARKERS = (
     ".env",
     ".git",
@@ -31,6 +35,30 @@ SENSITIVE_PATH_MARKERS = (
     ".pem",
     ".pfx",
     ".p12",
+)
+DENIED_COMMAND_PATTERNS = (
+    r"\brm\b",
+    r"\brmdir\b",
+    r"\bdel\b",
+    r"\berase\b",
+    r"\bRemove-Item\b",
+    r"\bmove\b",
+    r"\bmv\b",
+    r"\bcopy\b",
+    r"\bcp\b",
+    r"\bgit\s+push\b",
+    r"\bgit\s+reset\b",
+    r"\bgit\s+clean\b",
+    r"\bgit\s+checkout\b",
+    r"\bcurl\b",
+    r"\bwget\b",
+    r"\bInvoke-WebRequest\b",
+    r"\bInvoke-RestMethod\b",
+    r"\bnpm\s+(install|i|add)\b",
+    r"\bpnpm\s+(install|add)\b",
+    r"\byarn\s+(add|install)\b",
+    r"\bpip\s+install\b",
+    r"\buv\s+(add|pip\s+install|sync)\b",
 )
 
 
@@ -97,6 +125,27 @@ class WorkspaceReadPolicy:
                     False,
                     f"content must be at most {MAX_PROPOSED_TEXT_BYTES} bytes",
                 )
+        if request.name == "workspace.run_shell_command":
+            command = request.input.get("command")
+            if not isinstance(command, str) or not command.strip():
+                return ToolPolicyDecision(False, "command must be a non-empty string")
+            if len(command) > MAX_COMMAND_CHARS:
+                return ToolPolicyDecision(False, f"command must be at most {MAX_COMMAND_CHARS} characters")
+            timeout = request.input.get("timeout_seconds", MAX_COMMAND_TIMEOUT_SECONDS)
+            if (
+                not isinstance(timeout, int)
+                or timeout < 1
+                or timeout > MAX_COMMAND_TIMEOUT_SECONDS
+            ):
+                return ToolPolicyDecision(
+                    False,
+                    f"timeout_seconds must be between 1 and {MAX_COMMAND_TIMEOUT_SECONDS}",
+                )
+            if _has_sensitive_path_marker(command.lower()):
+                return ToolPolicyDecision(False, "command references a blocked secret-sensitive path")
+            for pattern in DENIED_COMMAND_PATTERNS:
+                if re.search(pattern, command, flags=re.IGNORECASE):
+                    return ToolPolicyDecision(False, f"command is blocked by policy pattern: {pattern}")
         return ToolPolicyDecision(True, "read-only workspace access allowed")
 
 
@@ -122,14 +171,18 @@ def agent_tool_contract() -> str:
         '"input":{"path":".","max_entries":80}},{"name":"workspace.read_text_file",'
         '"input":{"path":"README.md","max_bytes":6000}},'
         '{"name":"workspace.propose_text_file_write","input":{"path":"README.md",'
-        '"content":"complete proposed file content"}}]}\n\n'
+        '"content":"complete proposed file content"}},'
+        '{"name":"workspace.run_shell_command","input":{"command":"python -m pytest",'
+        '"cwd":".","timeout_seconds":30}}]}\n\n'
         "Allowed tools are workspace.list_files, workspace.read_text_file, and "
-        "workspace.propose_text_file_write. The write tool only creates a persisted "
-        "diff proposal; it does not modify files. Tools are policy checked, audited, "
+        "workspace.propose_text_file_write, and workspace.run_shell_command. The write "
+        "tool only creates a persisted diff proposal; it does not modify files. The "
+        "shell command tool runs inside the project workspace with captured output and "
+        "a short timeout, and policy blocks obvious destructive, network, package "
+        "install, and secret-sensitive commands. Tools are policy checked, audited, "
         "and cannot access obvious secret paths such as .env, .git, key, token, or "
-        "credential files. Do not claim shell commands, git actions, browser access, "
-        "or applied file edits. Only claim workspace inspection or proposed edits when "
-        "the tool results prove them."
+        "credential files. Only claim workspace inspection, shell results, or proposed "
+        "edits when the tool results prove them."
     )
 
 

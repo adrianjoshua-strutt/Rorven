@@ -61,6 +61,7 @@ separate worker topology remains available for production isolation and scaling.
 - `memory.md`
 - `model-layer.md`
 - `security.md`
+- `agent-capability-roadmap.md`
 - `evolution-and-migrations.md`
 - `decisions/`
 

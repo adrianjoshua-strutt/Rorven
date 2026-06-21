@@ -1,4 +1,4 @@
-import { AgentRun, Project, RunState } from "../api";
+import { AgentRun, ApprovalRecord, ArtifactRecord, Project, RunState } from "../api";
 import { AgentWorkEntry, ChatMessage } from "../types";
 import { isDone } from "./status";
 
@@ -32,7 +32,10 @@ export function buildProjectChat(
     }
   }
 
-  messages.push(...buildSubagentTimeline(persisted, subagents));
+  const projectApprovals = project.approvals ?? [];
+  const projectArtifacts = project.artifacts ?? [];
+  messages.push(...buildSubagentTimeline(persisted, subagents, projectApprovals));
+  messages.push(...buildApprovalTimeline(projectApprovals, projectArtifacts, subagents));
   const selectedRunSubagents = run
     ? subagents.filter((agent) => agent.run_id === run.id)
     : [];
@@ -94,6 +97,7 @@ function appendSelectedRunPlaceholder(
 function buildSubagentTimeline(
   projectEntries: { agent_run_id: string | null; role: string; title: string; body: string; created_at: string }[],
   subagents: AgentRun[],
+  approvals: ApprovalRecord[] = [],
 ): ChatMessage[] {
   if (!subagents.length) return [];
   const messages: ChatMessage[] = [];
@@ -102,10 +106,19 @@ function buildSubagentTimeline(
       .filter((entry) => entry.agent_run_id === agent.id)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     const assignment = entries.find((entry) => entry.role === "user");
+    const pendingApproval = approvals.find(
+      (approval) => approval.agent_run_id === agent.id && approval.status === "pending",
+    );
+    const statusTitle =
+      pendingApproval ? `${agent.definition.name} waiting for approval`
+      : agent.status === "queued" ? `${agent.definition.name} queued`
+      : agent.status === "waiting" ? `${agent.definition.name} waiting`
+      : isDone(agent.status) ? `${agent.definition.name} completed`
+      : `${agent.definition.name} running`;
     messages.push({
       id: `${agent.id}-started`,
       side: "orchestrator",
-      title: `${agent.definition.name} started`,
+      title: statusTitle,
       body: compactSummary(
         assignment?.body ||
           `${agent.definition.name} was started by the project orchestrator for this request.`,
@@ -117,7 +130,7 @@ function buildSubagentTimeline(
       actionLabel: "Open work log",
     });
 
-    if (!isDone(agent.status)) {
+    if (!isDone(agent.status) || pendingApproval) {
       continue;
     }
 
@@ -138,6 +151,65 @@ function buildSubagentTimeline(
     });
   }
   return messages;
+}
+
+function buildApprovalTimeline(
+  approvals: ApprovalRecord[],
+  artifacts: ArtifactRecord[],
+  subagents: AgentRun[],
+): ChatMessage[] {
+  return approvals.map((approval) => {
+    const artifact = artifacts.find((candidate) => candidate.id === approval.artifact_id);
+    const agent = subagents.find((candidate) => candidate.id === approval.agent_run_id);
+    const proposal = summarizeApprovalProposal(approval, artifact);
+    return {
+      id: `${approval.id}-${approval.status}`,
+      side: "orchestrator",
+      title: approvalTitle(approval, agent?.definition.name),
+      body: proposal,
+      time: approval.decided_at ?? approval.created_at,
+      status: approval.status,
+      kind: "approval",
+      agentId: approval.agent_run_id,
+      approval,
+      approvalArtifact: artifact,
+      actionLabel: "Open subagent",
+    };
+  });
+}
+
+function approvalTitle(approval: ApprovalRecord, agentName?: string): string {
+  const owner = agentName ?? "subagent";
+  if (approval.status === "pending") return `${owner} needs approval`;
+  if (approval.status === "applied") return `${owner} approval applied`;
+  if (approval.status === "rejected") return `${owner} approval rejected`;
+  if (approval.status === "failed") return `${owner} approval failed`;
+  return `${owner} approval`;
+}
+
+function summarizeApprovalProposal(approval: ApprovalRecord, artifact?: ArtifactRecord): string {
+  const fallback = `${approval.action} is ${approval.status}.`;
+  if (!artifact?.content) return fallback;
+  try {
+    const payload = JSON.parse(artifact.content) as {
+      request?: { input?: { path?: unknown } };
+      result?: { content?: unknown; metadata?: { path?: unknown } };
+    };
+    const path = payload.result?.metadata?.path ?? payload.request?.input?.path;
+    const proposal = typeof payload.result?.content === "string" ? payload.result.content : "";
+    const pathLine = typeof path === "string" ? `Path: ${path}` : "Path: workspace file";
+    const stateLine =
+      approval.status === "pending"
+        ? "This proposal is waiting for your approval."
+        : approval.status === "applied"
+          ? "This proposal was approved and applied."
+          : approval.status === "rejected"
+            ? "This proposal was rejected; no file was changed."
+            : fallback;
+    return compactSummary(`${stateLine}\n${pathLine}\n${proposal}`);
+  } catch {
+    return fallback;
+  }
 }
 
 export function buildAgentWork(agent: AgentRun, run: RunState | null): AgentWorkEntry[] {

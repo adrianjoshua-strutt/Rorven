@@ -9,6 +9,9 @@ from typing import Any
 from rorven.adapters.model import MODEL_PROFILE_NAMES, OPENROUTER_KEY_ENV, load_model_profile_config
 
 
+DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE = "ask_each_time"
+
+
 def read_settings(data_dir: Path, worker_status: dict[str, Any] | None = None) -> dict[str, Any]:
     persisted_profile_ids = _read_persisted_model_profile_ids(data_dir)
     model_config = load_model_profile_config(profile_overrides=persisted_profile_ids)
@@ -51,6 +54,12 @@ def read_settings(data_dir: Path, worker_status: dict[str, Any] | None = None) -
             "destructive_actions": "approval-required",
             "secret_exposure": "presence-only",
             "default_tool_access": "deny",
+            "text_file_write_approval": _read_text_file_write_approval_mode(data_dir),
+            "text_file_write_approval_modes": [
+                "ask_each_time",
+                "auto_apply_text_file_writes",
+                "reject_text_file_writes",
+            ],
         },
         "project_defaults": {
             "workspace_root_source": "user-selected",
@@ -95,6 +104,26 @@ def _read_workspace_base_root(data_dir: Path) -> str:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return str(Path.cwd().resolve())
+
+
+def _read_text_file_write_approval_mode(data_dir: Path) -> str:
+    state = _read_state(data_dir)
+    if state is None:
+        return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+    approvals = settings.get("approvals")
+    if not isinstance(approvals, dict):
+        return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+    value = approvals.get("text_file_write")
+    if value in {
+        "ask_each_time",
+        "auto_apply_text_file_writes",
+        "reject_text_file_writes",
+    }:
+        return value
+    return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
 
 
 def _read_state(data_dir: Path) -> dict[str, Any] | None:

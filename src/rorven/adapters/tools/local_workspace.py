@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from difflib import unified_diff
 import json
+import os
 from pathlib import Path
+import platform
+import subprocess
 from typing import Any
 
 from rorven.application.tools import (
+    MAX_COMMAND_TIMEOUT_SECONDS,
     MAX_LIST_ENTRIES,
     MAX_PROPOSED_TEXT_BYTES,
     MAX_READ_BYTES,
@@ -50,6 +54,8 @@ class LocalWorkspaceToolBroker:
             return self._propose_text_file_write(project, request)
         if request.name == "workspace.apply_text_file_write":
             return self._apply_text_file_write(project, agent_run, request)
+        if request.name == "workspace.run_shell_command":
+            return self._run_shell_command(project, request)
         raise ValueError(f"unsupported tool: {request.name}")
 
     def _list_files(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
@@ -184,6 +190,53 @@ class LocalWorkspaceToolBroker:
             },
         )
 
+    def _run_shell_command(self, project: Project, request: ToolRequest) -> ToolExecutionResult:
+        root = _workspace_root(project)
+        cwd = _resolve_inside(root, _input_cwd(request))
+        if not cwd.exists():
+            raise FileNotFoundError(f"cwd not found: {_display_path(root, cwd)}")
+        if not cwd.is_dir():
+            raise ValueError("workspace.run_shell_command cwd must be a directory")
+        if _is_sensitive(cwd.relative_to(root)):
+            raise ValueError("cwd is blocked by secret-safety policy")
+        command = request.input.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError("command must be a non-empty string")
+        timeout = _bounded_int(request.input.get("timeout_seconds"), MAX_COMMAND_TIMEOUT_SECONDS)
+        shell_command = _shell_command(command)
+        try:
+            completed = subprocess.run(
+                shell_command,
+                cwd=str(cwd),
+                env=_sanitized_env(),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            timed_out = False
+            stdout = completed.stdout
+            stderr = completed.stderr
+            return_code = completed.returncode
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            return_code = None
+        output = _format_command_output(command, stdout, stderr, return_code, timed_out)
+        return ToolExecutionResult(
+            content=output,
+            metadata={
+                "tool": request.name,
+                "cwd": _display_path(root, cwd),
+                "return_code": return_code,
+                "timed_out": timed_out,
+                "timeout_seconds": timeout,
+                "stdout_bytes": len(stdout.encode("utf-8", errors="replace")),
+                "stderr_bytes": len(stderr.encode("utf-8", errors="replace")),
+            },
+        )
+
 
 def _workspace_root(project: Project) -> Path:
     root = Path(project.workspace.workspace_root).resolve()
@@ -196,6 +249,13 @@ def _workspace_root(project: Project) -> Path:
 
 def _input_path(request: ToolRequest) -> str:
     value = request.input.get("path", ".")
+    if not isinstance(value, str) or not value.strip():
+        return "."
+    return value
+
+
+def _input_cwd(request: ToolRequest) -> str:
+    value = request.input.get("cwd", ".")
     if not isinstance(value, str) or not value.strip():
         return "."
     return value
@@ -227,3 +287,47 @@ def _is_sensitive(path: Path) -> bool:
 
 def _display_path(root: Path, target: Path) -> str:
     return "." if target == root else target.relative_to(root).as_posix()
+
+
+def _shell_command(command: str) -> list[str]:
+    if platform.system().lower().startswith("win"):
+        return ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command]
+    return ["/bin/sh", "-lc", command]
+
+
+def _sanitized_env() -> dict[str, str]:
+    allowed_names = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE"}
+    env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        upper = key.upper()
+        if upper in allowed_names:
+            env[key] = value
+    return env
+
+
+def _format_command_output(
+    command: str,
+    stdout: str,
+    stderr: str,
+    return_code: int | None,
+    timed_out: bool,
+) -> str:
+    stdout = _truncate_output(stdout)
+    stderr = _truncate_output(stderr)
+    lines = [
+        f"Command: {command}",
+        f"Return code: {'timeout' if timed_out else return_code}",
+        "",
+        "stdout:",
+        stdout or "<empty>",
+        "",
+        "stderr:",
+        stderr or "<empty>",
+    ]
+    return "\n".join(lines)
+
+
+def _truncate_output(value: str, max_chars: int = 12_000) -> str:
+    if len(value) <= max_chars:
+        return value
+    return value[:max_chars] + "\n<output truncated>"

@@ -4,7 +4,25 @@ import { SettingsSnapshot } from "../../api";
 import { SectionTitle } from "./SectionTitle";
 import { SettingsTile } from "./SettingsTile";
 
-export function SafetyPolicySection({ settings }: { settings: SettingsSnapshot | null }) {
+const approvalLabels: Record<string, string> = {
+  ask_each_time: "Ask each time",
+  auto_apply_text_file_writes: "Auto-apply text file writes",
+  reject_text_file_writes: "Reject text file writes",
+};
+
+export function SafetyPolicySection({
+  settings,
+  onUpdateApprovalPolicy,
+}: {
+  settings: SettingsSnapshot | null;
+  onUpdateApprovalPolicy: (textFileWrite: string) => void;
+}) {
+  const selectedMode = settings?.policy.text_file_write_approval ?? "ask_each_time";
+  const modes = settings?.policy.text_file_write_approval_modes ?? [
+    "ask_each_time",
+    "auto_apply_text_file_writes",
+    "reject_text_file_writes",
+  ];
   return (
     <section className="settings-section">
       <SectionTitle
@@ -32,6 +50,24 @@ export function SafetyPolicySection({ settings }: { settings: SettingsSnapshot |
           detail="Agents receive explicit capabilities, not ambient machine access."
         />
       </SimpleGrid>
+      <div className="approval-policy-control" aria-label="Text file write approval policy">
+        <div>
+          <strong>Text file write approvals</strong>
+          <span>Choose how brokered text-file write proposals are handled.</span>
+        </div>
+        <div className="approval-policy-options">
+          {modes.map((mode) => (
+            <button
+              className={mode === selectedMode ? "selected" : ""}
+              key={mode}
+              onClick={() => onUpdateApprovalPolicy(mode)}
+              type="button"
+            >
+              {approvalLabels[mode] ?? mode}
+            </button>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef } from "react";
-import { AgentRun, Project, RunState } from "../../api";
+import { AgentRun, ApprovalRecord, Project, RunState } from "../../api";
 import { ChatMessage, LoadState } from "../../types";
 import { ChatBubble } from "../chat/ChatBubble";
 import { Composer } from "../chat/Composer";
@@ -13,6 +13,8 @@ export function ProjectChatView({
   message,
   onMessageChange,
   onInspectAgent,
+  onApprove,
+  onReject,
   onSubmit,
   project,
   run,
@@ -24,6 +26,8 @@ export function ProjectChatView({
   message: string;
   onMessageChange: (value: string) => void;
   onInspectAgent: (agentId: string) => void;
+  onApprove: (approval: ApprovalRecord) => void;
+  onReject: (approval: ApprovalRecord) => void;
   onSubmit: (event: FormEvent) => void;
   project: Project | null;
   run: RunState | null;
@@ -51,7 +55,13 @@ export function ProjectChatView({
         {error ? <div className="error-banner">{error}</div> : null}
         {chatMessages.length > 0 ? (
           chatMessages.map((item) => (
-            <ChatBubble item={item} key={item.id} onInspectAgent={onInspectAgent} />
+            <ChatBubble
+              item={item}
+              key={item.id}
+              onApprove={onApprove}
+              onInspectAgent={onInspectAgent}
+              onReject={onReject}
+            />
           ))
         ) : (
           <div className="empty-chat">

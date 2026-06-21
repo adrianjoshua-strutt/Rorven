@@ -42,6 +42,18 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
     runtime = _create_runtime_adapter(store)
     model_gateway = _create_model_gateway(store)
     tool_broker = LocalWorkspaceToolBroker()
+    worker = WorkerService(
+        runs=store,
+        tasks=store,
+        artifacts=store,
+        events=store,
+        model_gateway=model_gateway,
+        approvals=store,
+        conversations=store,
+        tool_policy=WorkspaceReadPolicy(),
+        tool_broker=tool_broker,
+        approval_policy=store,
+    )
     projects = ProjectService(
         runs=store,
         events=store,
@@ -61,6 +73,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             artifacts=store,
             tool_broker=tool_broker,
             conversations=store,
+            worker=worker,
         ),
         root=RootService(
             runs=store,
@@ -70,17 +83,7 @@ def create_local_services(data_dir: Path | None = None) -> LocalServices:
             project_defaults=store,
             workspace_provisioner=workspace_provisioner,
         ),
-        worker=WorkerService(
-            runs=store,
-            tasks=store,
-            artifacts=store,
-            events=store,
-            model_gateway=model_gateway,
-            approvals=store,
-            conversations=store,
-            tool_policy=WorkspaceReadPolicy(),
-            tool_broker=tool_broker,
-        ),
+        worker=worker,
     )
 
 

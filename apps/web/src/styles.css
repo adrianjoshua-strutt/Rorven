@@ -404,6 +404,15 @@ button:focus-visible {
   background: #11181c;
 }
 
+.chat-bubble.approval {
+  max-width: min(720px, 82%);
+}
+
+.chat-bubble.approval .bubble-body {
+  border-color: rgba(244, 188, 88, 0.42);
+  background: #171614;
+}
+
 .bubble-meta {
   display: flex;
   align-items: center;
@@ -434,11 +443,32 @@ button:focus-visible {
   padding: 0 10px;
   font-size: 0.78rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
 
 .bubble-action:hover {
   border-color: rgba(123, 166, 255, 0.45);
   background: #151d22;
+}
+
+.bubble-action.primary {
+  border-color: rgba(65, 194, 168, 0.45);
+  background: rgba(65, 194, 168, 0.14);
+}
+
+.bubble-action.danger {
+  border-color: rgba(223, 107, 98, 0.48);
+  background: rgba(223, 107, 98, 0.12);
+}
+
+.approval-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .composer {
@@ -661,6 +691,44 @@ button:focus-visible {
   margin-top: 9px;
   color: var(--text);
   overflow-wrap: anywhere;
+}
+
+.approval-policy-control {
+  border: 1px solid var(--line);
+  background: var(--pane-3);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.approval-policy-control strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.approval-policy-control span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.approval-policy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.approval-policy-options button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  background: var(--pane);
+  color: var(--text);
+  padding: 0 11px;
+  cursor: pointer;
+}
+
+.approval-policy-options button.selected {
+  border-color: rgba(65, 194, 168, 0.55);
+  background: rgba(65, 194, 168, 0.14);
 }
 
 .profile-table {

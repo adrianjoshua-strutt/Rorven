@@ -1,15 +1,21 @@
-import { Bot, User } from "lucide-react";
+import { Bot, Check, X, User } from "lucide-react";
+import { ApprovalRecord } from "../../api";
 import { ChatMessage } from "../../types";
 import { StatusPill } from "../status/StatusPill";
 
 export function ChatBubble({
   item,
+  onApprove,
   onInspectAgent,
+  onReject,
 }: {
   item: ChatMessage;
+  onApprove?: (approval: ApprovalRecord) => void;
   onInspectAgent?: (agentId: string) => void;
+  onReject?: (approval: ApprovalRecord) => void;
 }) {
   const isInspectable = Boolean(item.agentId && onInspectAgent);
+  const isPendingApproval = item.kind === "approval" && item.approval?.status === "pending";
   return (
     <article className={`chat-bubble ${item.side} ${item.kind ?? "chat"}`}>
       <div className="bubble-icon">
@@ -28,6 +34,26 @@ export function ChatBubble({
           </span>
         </div>
         <p>{item.body}</p>
+        {isPendingApproval && item.approval ? (
+          <div className="approval-inline-actions">
+            <button
+              className="bubble-action primary"
+              onClick={() => item.approval && onApprove?.(item.approval)}
+              type="button"
+            >
+              <Check size={14} aria-hidden="true" />
+              Approve once
+            </button>
+            <button
+              className="bubble-action danger"
+              onClick={() => item.approval && onReject?.(item.approval)}
+              type="button"
+            >
+              <X size={14} aria-hidden="true" />
+              Reject
+            </button>
+          </div>
+        ) : null}
         {isInspectable ? (
           <button
             className="bubble-action"

@@ -30,7 +30,7 @@ current_decisions:
   secret_delivery: brokered-tools-first
   tool_abstraction: ToolBroker
   tool_policy_abstraction: ToolPolicy
-  initial_tool_adapter: local-workspace-inspection-and-proposals
+  initial_tool_adapter: local-workspace-inspection-proposals-approved-text-writes-and-bounded-shell
   approval_abstraction: ApprovalRepository
   initial_approval_adapter: local-file-store-state-json
   workspace_provisioning_abstraction: WorkspaceProvisioner
@@ -60,6 +60,7 @@ next_required_gates:
   - validation-plan-for-proposal-only-write-tools
   - postgres-repository-slice
   - tool-broker-sandbox-and-recovery-slice
+  - command-approval-policy-slice
 known_issues:
   - id: I-001
     title: Legacy duplicate projects in .rorven/state.json
@@ -84,15 +85,16 @@ known_issues:
     remediation: Implement the Postgres repository slice with startup migration
       tests before claiming production persistence.
   - id: I-004
-    title: workspace writes require approval but are not sandboxed
+    title: workspace tools are useful but not sandboxed
     description: >
       Child agents can request bounded multi-round policy-checked workspace
-      inspection tools and text-file write proposals. Successful proposals
-      create pending approval records, and explicit approval applies the
-      proposed text through the workspace broker. The local apply adapter is not
-      sandboxed and does not yet have full idempotency or interrupted-apply
-      recovery coverage. Agents still cannot run shell commands, use git,
-      access the browser, use network tools, or retrieve secrets.
+      inspection tools, text-file write proposals, approved text-file applies,
+      and workspace-scoped shell commands. Successful write proposals create
+      pending approval records unless a standing approval policy applies. The
+      local apply and bounded shell adapters are not sandboxed and do not yet
+      have full idempotency, interrupted-apply recovery, or risky-command
+      approval coverage. Agents still cannot use git writes, access the browser,
+      use network tools, install packages, or retrieve secrets.
     remediation: Add idempotency keys, recovery tests, and sandboxed apply before
-      expanding mutable tools.
-last_updated: '2026-06-20'
+      expanding mutable tools; add command approval policy before risky shell commands.
+last_updated: '2026-06-21'

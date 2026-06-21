@@ -24,6 +24,24 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertFalse(root_decision.allowed)
         self.assertFalse(secret_decision.allowed)
 
+    def test_policy_allows_safe_command_and_blocks_destructive_command(self) -> None:
+        project, child, _root = _project_and_agents()
+        policy = WorkspaceReadPolicy()
+
+        safe = policy.evaluate(
+            project,
+            child,
+            ToolRequest("workspace.run_shell_command", {"command": "python --version"}),
+        )
+        destructive = policy.evaluate(
+            project,
+            child,
+            ToolRequest("workspace.run_shell_command", {"command": "Remove-Item README.md"}),
+        )
+
+        self.assertTrue(safe.allowed)
+        self.assertFalse(destructive.allowed)
+
     def test_local_workspace_broker_reads_text_inside_workspace(self) -> None:
         project, child, _root = _project_and_agents()
         workspace = Path(project.workspace.workspace_root)
@@ -99,6 +117,25 @@ class WorkspaceToolTests(unittest.TestCase):
 
         self.assertTrue(result.metadata["applied"])
         self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+
+    def test_local_workspace_broker_runs_shell_command_in_workspace(self) -> None:
+        project, child, _root = _project_and_agents()
+        workspace = Path(project.workspace.workspace_root)
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "README.md").write_text("hello", encoding="utf-8")
+
+        result = LocalWorkspaceToolBroker().execute(
+            project,
+            child,
+            ToolRequest(
+                "workspace.run_shell_command",
+                {"command": "Get-ChildItem README.md | Select-Object -ExpandProperty Name"},
+            ),
+        )
+
+        self.assertIn("README.md", result.content)
+        self.assertEqual(".", result.metadata["cwd"])
+        self.assertEqual(False, result.metadata["timed_out"])
 
 
 def _project_and_agents() -> tuple[Project, AgentRun, AgentRun]:

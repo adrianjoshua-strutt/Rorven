@@ -49,6 +49,9 @@ class ProjectState:
     runs: Sequence[Run]
     agent_runs: Sequence[AgentRun]
     tasks: Sequence[Task]
+    artifacts: Sequence[ArtifactMetadata]
+    artifact_contents: dict[str, str]
+    approvals: Sequence[Approval]
     conversation_entries: Sequence[ConversationEntry]
 
 
@@ -124,14 +127,22 @@ class ProjectService:
         runs = self._runs.list_runs(project_id)
         agent_runs: list[AgentRun] = []
         tasks: list[Task] = []
+        artifacts: list[ArtifactMetadata] = []
+        approvals: list[Approval] = []
         for run in runs:
             agent_runs.extend(self._runs.get_run_tree(project_id, run.id))
             tasks.extend(self._tasks.list_for_run(run.id))
+            run_artifacts = list(self._artifacts.list_artifacts_for_run(run.id))
+            artifacts.extend(run_artifacts)
+            approvals.extend(self._approvals.list_approvals_for_run(run.id))
         return ProjectState(
             project=self._runs.get_project(project_id),
             runs=runs,
             agent_runs=agent_runs,
             tasks=tasks,
+            artifacts=artifacts,
+            artifact_contents={artifact.id: self._artifacts.get_text(artifact.id) for artifact in artifacts},
+            approvals=approvals,
             conversation_entries=self._conversations.list_conversation_for_project(project_id),
         )
 
@@ -204,6 +215,13 @@ def _tool_request_without_content(request: ToolRequest) -> dict[str, object]:
     return {"name": request.name, "input": sanitized}
 
 
+def _approval_applied_summary(approval: Approval, result: ToolExecutionResult) -> str:
+    path = result.metadata.get("path")
+    if isinstance(path, str) and path.strip():
+        return f"Applied {approval.action} to {path}."
+    return f"Applied {approval.action}."
+
+
 class ApprovalService:
     def __init__(
         self,
@@ -212,12 +230,14 @@ class ApprovalService:
         artifacts: ArtifactStore,
         tool_broker: ToolBroker,
         conversations: ConversationRepository,
+        worker: WorkerService | None = None,
     ) -> None:
         self._runs = runs
         self._approvals = approvals
         self._artifacts = artifacts
         self._tool_broker = tool_broker
         self._conversations = conversations
+        self._worker = worker
 
     def list_for_run(self, project_id: str, run_id: str) -> Sequence[Approval]:
         self._runs.get_run(project_id, run_id)
@@ -262,11 +282,17 @@ class ApprovalService:
                         agent_run_id=approval.agent_run_id,
                         role=ConversationRole.EVENT,
                         title="Approval applied",
-                        body=f"Approved {approval.action}.",
+                        body=_approval_applied_summary(applied, result),
                         artifact_id=result_artifact.id,
                     )
                 ]
             )
+            if self._worker is not None:
+                self._worker.complete_waiting_agent_after_approval(
+                    applied,
+                    summary=_approval_applied_summary(applied, result),
+                    artifact_id=result_artifact.id,
+                )
             return applied
         except Exception as exc:
             failed = approval.fail(str(exc))
@@ -314,6 +340,12 @@ class ApprovalService:
                 )
             ]
         )
+        if self._worker is not None:
+            self._worker.complete_waiting_agent_after_approval(
+                rejected,
+                summary=f"The proposal for {rejected.action} was rejected. No workspace change was applied.",
+                artifact_id=rejected.artifact_id,
+            )
         return rejected
 
     def _scoped_approval(self, project_id: str, run_id: str, approval_id: str) -> Approval:

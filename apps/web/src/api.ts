@@ -9,6 +9,8 @@ export type Project = {
   runs?: RunSummary[];
   agent_runs?: AgentRun[];
   tasks?: Task[];
+  artifacts?: ArtifactRecord[];
+  approvals?: ApprovalRecord[];
   conversation_entries?: ConversationEntry[];
 };
 
@@ -140,6 +142,8 @@ export type SettingsSnapshot = {
     destructive_actions: string;
     secret_exposure: string;
     default_tool_access: string;
+    text_file_write_approval: string;
+    text_file_write_approval_modes: string[];
   };
   project_defaults: {
     workspace_root_source: string;
@@ -216,6 +220,16 @@ export async function updateProjectDefaults(input: {
   workspace_base_root: string;
 }): Promise<SettingsSnapshot> {
   const payload = await request<{ settings: SettingsSnapshot }>("/settings/project-defaults", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return payload.settings;
+}
+
+export async function updateApprovalPolicy(input: {
+  text_file_write: string;
+}): Promise<SettingsSnapshot> {
+  const payload = await request<{ settings: SettingsSnapshot }>("/settings/approval-policy", {
     method: "POST",
     body: JSON.stringify(input),
   });

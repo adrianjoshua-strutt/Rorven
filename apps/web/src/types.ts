@@ -1,4 +1,4 @@
-import { AgentRun } from "./api";
+import { AgentRun, ApprovalRecord, ArtifactRecord } from "./api";
 
 export type LoadState = "idle" | "loading" | "error";
 
@@ -9,8 +9,10 @@ export type ChatMessage = {
   body: string;
   time: string;
   status?: string;
-  kind?: "chat" | "subagent";
+  kind?: "chat" | "subagent" | "approval";
   agentId?: string;
+  approval?: ApprovalRecord;
+  approvalArtifact?: ArtifactRecord;
   actionLabel?: string;
 };
 

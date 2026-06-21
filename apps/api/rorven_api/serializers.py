@@ -12,6 +12,11 @@ def project_state_to_api(state: ProjectState) -> dict[str, Any]:
     data["runs"] = [run_to_api(run) for run in state.runs]
     data["agent_runs"] = [agent_run_to_api(agent_run) for agent_run in state.agent_runs]
     data["tasks"] = [task_to_api(task) for task in state.tasks]
+    data["artifacts"] = [
+        artifact_to_api(artifact, state.artifact_contents.get(artifact.id, ""))
+        for artifact in state.artifacts
+    ]
+    data["approvals"] = [approval_to_api(approval) for approval in state.approvals]
     data["conversation_entries"] = [
         conversation_entry_to_api(entry) for entry in state.conversation_entries
     ]

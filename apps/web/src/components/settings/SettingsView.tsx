@@ -14,12 +14,14 @@ export function SettingsView({
   loadState,
   apiEndpoint,
   onReload,
+  onUpdateApprovalPolicy,
   onUpdateWorkspaceBaseRoot,
 }: {
   settings: SettingsSnapshot | null;
   loadState: LoadState;
   apiEndpoint: string;
   onReload: () => void;
+  onUpdateApprovalPolicy: (textFileWrite: string) => void;
   onUpdateWorkspaceBaseRoot: (workspaceBaseRoot: string) => void;
 }) {
   const credential = settings?.credentials[0] ?? null;
@@ -58,7 +60,7 @@ export function SettingsView({
         <CredentialsSection credential={credential} />
         <ModelProfilesSection settings={settings} />
         <RuntimeSection apiEndpoint={apiEndpoint} settings={settings} />
-        <SafetyPolicySection settings={settings} />
+        <SafetyPolicySection settings={settings} onUpdateApprovalPolicy={onUpdateApprovalPolicy} />
         <ProjectDefaultsSection
           settings={settings}
           onUpdateWorkspaceBaseRoot={onUpdateWorkspaceBaseRoot}

@@ -233,19 +233,7 @@ class ApiIntegrationTests(unittest.TestCase):
                     {
                         "message": {
                             "role": "assistant",
-                            "content": '{"action":"final","content":"Read README and proposed an additive update."}',
-                        }
-                    }
-                ],
-                "model": "test/model",
-                "usage": {"total_tokens": 7},
-            },
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": "Summary includes the proposed README change.",
+                            "content": "Summary includes the applied README change.",
                         }
                     }
                 ],
@@ -285,12 +273,12 @@ class ApiIntegrationTests(unittest.TestCase):
                     state_response = client.get(f"/projects/{project_id}/runs/{run_id}")
                     self.assertEqual(200, state_response.status_code)
                     state_payload = state_response.json()["run"]
-                    if state_payload["status"] == "completed":
+                    if state_payload["approvals"]:
                         break
                     sleep(0.05)
 
                 self.assertIsNotNone(state_payload)
-                self.assertEqual("completed", state_payload["status"])
+                self.assertEqual("waiting", state_payload["status"])
                 self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
                 self.assertEqual(1, len(state_payload["approvals"]))
                 artifact_text = "\n".join(artifact["content"] for artifact in state_payload["artifacts"])
@@ -303,6 +291,8 @@ class ApiIntegrationTests(unittest.TestCase):
                 self.assertEqual(200, approve_response.status_code)
                 self.assertEqual("applied", approve_response.json()["approval"]["status"])
                 self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))
+                completed_payload = client.get(f"/projects/{project_id}/runs/{run_id}").json()["run"]
+                self.assertEqual("completed", completed_payload["status"])
 
     def test_approval_endpoint_applies_proposed_workspace_write(self) -> None:
         root = Path("test-output") / "tests" / f"api-approval-{uuid4()}"
@@ -373,19 +363,7 @@ class ApiIntegrationTests(unittest.TestCase):
                     {
                         "message": {
                             "role": "assistant",
-                            "content": '{"action":"final","content":"Proposed README update."}',
-                        }
-                    }
-                ],
-                "model": "test/model",
-                "usage": {"total_tokens": 7},
-            },
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": "Summary includes proposal.",
+                            "content": "Summary includes applied proposal.",
                         }
                     }
                 ],
@@ -400,20 +378,24 @@ class ApiIntegrationTests(unittest.TestCase):
             self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
             self.assertEqual(200, client.post("/worker/work-once", json={"worker_id": "api-test", "limit": 1}).status_code)
 
-        approvals_response = client.get(f"/projects/{project_id}/runs/{run_id}/approvals")
-        self.assertEqual(200, approvals_response.status_code)
-        approvals = approvals_response.json()["approvals"]
-        self.assertEqual(1, len(approvals))
-        self.assertEqual("pending", approvals[0]["status"])
-        self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+            approvals_response = client.get(f"/projects/{project_id}/runs/{run_id}/approvals")
+            self.assertEqual(200, approvals_response.status_code)
+            approvals = approvals_response.json()["approvals"]
+            self.assertEqual(1, len(approvals))
+            self.assertEqual("pending", approvals[0]["status"])
+            self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
+            waiting_response = client.get(f"/projects/{project_id}/runs/{run_id}")
+            self.assertEqual("waiting", waiting_response.json()["run"]["status"])
 
-        approve_response = client.post(
-            f"/projects/{project_id}/runs/{run_id}/approvals/{approvals[0]['id']}/approve"
-        )
+            approve_response = client.post(
+                f"/projects/{project_id}/runs/{run_id}/approvals/{approvals[0]['id']}/approve"
+            )
 
-        self.assertEqual(200, approve_response.status_code)
-        self.assertEqual("applied", approve_response.json()["approval"]["status"])
-        self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+            self.assertEqual(200, approve_response.status_code)
+            self.assertEqual("applied", approve_response.json()["approval"]["status"])
+            self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
+            completed_response = client.get(f"/projects/{project_id}/runs/{run_id}")
+            self.assertEqual("completed", completed_response.json()["run"]["status"])
 
 
 if __name__ == "__main__":

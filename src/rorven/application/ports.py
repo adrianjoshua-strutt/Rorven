@@ -130,6 +130,14 @@ class ApprovalRepository(Protocol):
         """Persist an approval decision and lifecycle events atomically."""
 
 
+class ApprovalPolicyRepository(Protocol):
+    def get_text_file_write_approval_mode(self) -> str:
+        """Return the configured policy for text-file write proposals."""
+
+    def set_text_file_write_approval_mode(self, mode: str) -> None:
+        """Persist the configured policy for text-file write proposals."""
+
+
 class AgentRuntime(Protocol):
     def start_parent_run(self, project: Project, command: str) -> Run:
         """Create and persist the parent run before child work exists."""

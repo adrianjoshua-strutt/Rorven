@@ -58,6 +58,9 @@ export function App() {
             loadState={consoleState.settingsLoadState}
             settings={consoleState.settingsSnapshot}
             onReload={() => void consoleState.loadSettings()}
+            onUpdateApprovalPolicy={(value) =>
+              void consoleState.handleUpdateApprovalPolicy(value)
+            }
             onUpdateWorkspaceBaseRoot={(value) =>
               void consoleState.handleUpdateWorkspaceBaseRoot(value)
             }
@@ -69,7 +72,9 @@ export function App() {
             loadState={consoleState.loadState}
             message={consoleState.message}
             onMessageChange={consoleState.setMessage}
+            onApprove={(approval) => void consoleState.handleApprovalDecision(approval, "approve")}
             onInspectAgent={(agentId) => void consoleState.inspectProjectAgent(agentId)}
+            onReject={(approval) => void consoleState.handleApprovalDecision(approval, "reject")}
             onSubmit={consoleState.handleSubmitMessage}
             project={consoleState.selectedProject}
             run={consoleState.selectedRun}

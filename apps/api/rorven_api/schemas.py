@@ -31,3 +31,7 @@ class ModelProfileSettingsRequest(BaseModel):
 
 class ProjectDefaultsSettingsRequest(BaseModel):
     workspace_base_root: str = Field(min_length=1)
+
+
+class ApprovalPolicySettingsRequest(BaseModel):
+    text_file_write: str = Field(min_length=1)

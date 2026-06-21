@@ -16,6 +16,7 @@ from typing import Any, Sequence
 
 from rorven.adapters.model import DEFAULT_MODEL_IDS
 from rorven.application.ports import (
+    ApprovalPolicyRepository,
     ApprovalRepository,
     ArtifactStore,
     ConversationRepository,
@@ -47,6 +48,12 @@ from rorven.domain import (
 
 
 MODEL_PROFILE_NAMES = ("utility", "balanced", "reasoning", "frontier")
+TEXT_FILE_WRITE_APPROVAL_MODES = {
+    "ask_each_time",
+    "auto_apply_text_file_writes",
+    "reject_text_file_writes",
+}
+DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE = "ask_each_time"
 
 
 class LocalFilePlatformStore(
@@ -55,6 +62,7 @@ class LocalFilePlatformStore(
     TaskQueue,
     ArtifactStore,
     ApprovalRepository,
+    ApprovalPolicyRepository,
     ConversationRepository,
     ProjectDefaultsRepository,
 ):
@@ -433,6 +441,40 @@ class LocalFilePlatformStore(
             project_defaults["workspace_base_root"] = str(Path(workspace_base_root).resolve())
             self._write_state(state)
 
+    def get_text_file_write_approval_mode(self) -> str:
+        with self._lock:
+            state = self._read_state()
+            settings = state.get("settings")
+            if not isinstance(settings, dict):
+                return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+            approvals = settings.get("approvals")
+            if not isinstance(approvals, dict):
+                return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+            value = approvals.get("text_file_write")
+            if isinstance(value, str) and value in TEXT_FILE_WRITE_APPROVAL_MODES:
+                return value
+            return DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
+
+    def set_text_file_write_approval_mode(self, mode: str) -> None:
+        normalized = mode.strip()
+        if normalized not in TEXT_FILE_WRITE_APPROVAL_MODES:
+            raise ValueError(
+                "text_file_write approval mode must be ask_each_time, "
+                "auto_apply_text_file_writes, or reject_text_file_writes"
+            )
+        with self._lock:
+            state = self._read_state()
+            settings = state.setdefault("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
+                state["settings"] = settings
+            approvals = settings.setdefault("approvals", {})
+            if not isinstance(approvals, dict):
+                approvals = {}
+                settings["approvals"] = approvals
+            approvals["text_file_write"] = normalized
+            self._write_state(state)
+
     def get_text(self, artifact_id: str) -> str:
         with self._lock:
             state = self._read_state()
@@ -491,6 +533,9 @@ class LocalFilePlatformStore(
             "root_messages": [],
             "settings": {
                 "model_profiles": {},
+                "approvals": {
+                    "text_file_write": DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE,
+                },
                 "project_defaults": {
                     "workspace_base_root": self._default_workspace_base_root,
                 },
@@ -524,6 +569,14 @@ class LocalFilePlatformStore(
             "workspace_base_root"
         ].strip():
             project_defaults["workspace_base_root"] = self._default_workspace_base_root
+            changed = True
+        approvals = settings.get("approvals")
+        if not isinstance(approvals, dict):
+            settings["approvals"] = {}
+            approvals = settings["approvals"]
+            changed = True
+        if approvals.get("text_file_write") not in TEXT_FILE_WRITE_APPROVAL_MODES:
+            approvals["text_file_write"] = DEFAULT_TEXT_FILE_WRITE_APPROVAL_MODE
             changed = True
 
         # Seed product defaults into persisted settings so model routing is explicit

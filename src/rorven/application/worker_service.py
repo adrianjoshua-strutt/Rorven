@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 import json
 from typing import Sequence
@@ -19,6 +20,7 @@ from rorven.application.dispatching import (
 from rorven.application.modeling import ModelMessage, ModelRequest, ModelResponse
 from rorven.application.ports import (
     ApprovalRepository,
+    ApprovalPolicyRepository,
     ArtifactStore,
     ConversationRepository,
     EventRepository,
@@ -40,6 +42,7 @@ from rorven.application.tools import (
 )
 from rorven.domain import (
     Approval,
+    ApprovalStatus,
     AgentRun,
     ArtifactMetadata,
     ConversationEntry,
@@ -57,6 +60,12 @@ from rorven.domain import (
 MAX_ORCHESTRATOR_HISTORY_ENTRIES = 12
 
 
+@dataclass(frozen=True, slots=True)
+class AgentExecutionOutcome:
+    content: str
+    waiting_for_approval: bool = False
+
+
 class WorkerService:
     def __init__(
         self,
@@ -69,6 +78,7 @@ class WorkerService:
         conversations: ConversationRepository,
         tool_policy: ToolPolicy | None = None,
         tool_broker: ToolBroker | None = None,
+        approval_policy: ApprovalPolicyRepository | None = None,
     ) -> None:
         self._runs = runs
         self._tasks = tasks
@@ -79,6 +89,7 @@ class WorkerService:
         self._conversations = conversations
         self._tool_policy = tool_policy or DenyAllToolPolicy()
         self._tool_broker = tool_broker
+        self._approval_policy = approval_policy
 
     def work_once(self, worker_id: str, limit: int = 2) -> Sequence[Task]:
         leased = self._tasks.lease_ready(worker_id, timedelta(seconds=30), limit)
@@ -91,12 +102,17 @@ class WorkerService:
                     completed.append(task)
                     continue
                 else:
-                    content = self._run_agent(agent_run)
+                    outcome = self._run_agent(agent_run)
             except Exception as exc:
                 self._fail_agent_task(task, agent_run, exc)
                 continue
 
-            artifact = self._put_agent_result(agent_run, content)
+            if outcome.waiting_for_approval:
+                self._pause_agent_for_approval(task, agent_run, outcome.content)
+                completed.append(task)
+                continue
+
+            artifact = self._put_agent_result(agent_run, outcome.content)
             finished_agent = agent_run.transition(RunStatus.COMPLETED, artifact.id)
             self._runs.update_agent_run(
                 finished_agent,
@@ -128,7 +144,7 @@ class WorkerService:
                 completed.append(task)
         return completed
 
-    def _run_agent(self, agent_run: AgentRun) -> str:
+    def _run_agent(self, agent_run: AgentRun) -> AgentExecutionOutcome:
         run = self._runs.get_run(agent_run.project_id, agent_run.run_id)
         project = self._runs.get_project(agent_run.project_id)
         conversation_history = self._project_orchestrator_entries(agent_run.project_id)
@@ -161,10 +177,23 @@ class WorkerService:
                     agent_run.definition.name,
                     content,
                 )
-                return content
+                return AgentExecutionOutcome(content)
             if tool_round >= MAX_TOOL_ROUNDS:
                 raise ValueError(f"agent exceeded {MAX_TOOL_ROUNDS} tool rounds")
             tool_results = self._execute_tool_calls(agent_run, instruction.tool_requests)
+            pending_approval = _first_pending_approval(tool_results)
+            if pending_approval:
+                content = (
+                    "Waiting for approval before applying the proposed workspace change. "
+                    f"Approval id: {pending_approval}."
+                )
+                self._append_conversation(
+                    agent_run,
+                    ConversationRole.EVENT,
+                    "Waiting for approval",
+                    content,
+                )
+                return AgentExecutionOutcome(content, waiting_for_approval=True)
             messages = (
                 *messages,
                 ModelMessage("assistant", response.content),
@@ -273,6 +302,7 @@ class WorkerService:
                     "allowed": True,
                     "artifact_id": artifact.id,
                     "approval_id": approval.id if approval else None,
+                    "approval_status": approval.status.value if approval else None,
                     "metadata": result.metadata,
                     "content": result.content,
                 }
@@ -321,7 +351,169 @@ class WorkerService:
                 agent_run.run_id,
             ),
         )
+        mode = (
+            self._approval_policy.get_text_file_write_approval_mode()
+            if self._approval_policy is not None
+            else "ask_each_time"
+        )
+        if mode == "reject_text_file_writes":
+            rejected = approval.reject()
+            self._approvals.update_approval(
+                rejected,
+                [
+                    Event.create(
+                        agent_run.project_id,
+                        EventType.APPROVAL_REJECTED,
+                        {"approval_id": approval.id, "artifact_id": approval.artifact_id},
+                        agent_run.run_id,
+                    )
+                ],
+            )
+            self._append_conversation(
+                agent_run,
+                ConversationRole.EVENT,
+                "Approval rejected by policy",
+                "Rejected workspace.apply_text_file_write by the current approval policy.",
+                artifact.id,
+            )
+            return rejected
+        if mode == "auto_apply_text_file_writes":
+            return self._auto_apply_approval(agent_run, request, approval)
         return approval
+
+    def _auto_apply_approval(
+        self,
+        agent_run: AgentRun,
+        proposal_request: ToolRequest,
+        approval: Approval,
+    ) -> Approval:
+        if self._tool_broker is None:
+            return approval
+        project = self._runs.get_project(agent_run.project_id)
+        path = proposal_request.input.get("path")
+        content = proposal_request.input.get("content")
+        if not isinstance(path, str) or not isinstance(content, str):
+            return approval
+        apply_request = ToolRequest(
+            "workspace.apply_text_file_write",
+            {
+                "path": path,
+                "content": content,
+                "proposal_artifact_id": approval.artifact_id,
+                "approval_id": approval.id,
+            },
+        )
+        result = self._tool_broker.execute(project, agent_run, apply_request)
+        result_artifact = self._put_apply_artifact(approval, apply_request, result, error=None)
+        applied = approval.apply(result_artifact.id)
+        self._approvals.update_approval(
+            applied,
+            [
+                Event.create(
+                    approval.project_id,
+                    EventType.APPROVAL_APPLIED,
+                    {
+                        "approval_id": approval.id,
+                        "artifact_id": approval.artifact_id,
+                        "result_artifact_id": result_artifact.id,
+                        "mode": "auto_apply_text_file_writes",
+                    },
+                    approval.run_id,
+                )
+            ],
+        )
+        self._append_conversation(
+            agent_run,
+            ConversationRole.EVENT,
+            "Approval auto-applied",
+            f"Auto-applied {approval.action} for {path}.",
+            result_artifact.id,
+        )
+        return applied
+
+    def _put_apply_artifact(
+        self,
+        approval: Approval,
+        request: ToolRequest,
+        result: ToolExecutionResult,
+        error: str | None,
+    ) -> ArtifactMetadata:
+        content = {
+            "request": _tool_request_without_content(request),
+            "approval_id": approval.id,
+            "proposal_artifact_id": approval.artifact_id,
+            "result": None if result is None else {"content": result.content, "metadata": result.metadata},
+            "error": error,
+        }
+        return self._artifacts.put_text(
+            project_id=approval.project_id,
+            run_id=approval.run_id,
+            kind="tool.execution",
+            name=f"approved-apply-{approval.id}.json",
+            content=json.dumps(content, indent=2, sort_keys=True),
+        )
+
+    def _pause_agent_for_approval(self, task: Task, agent_run: AgentRun, content: str) -> None:
+        waiting_agent = agent_run.transition(RunStatus.WAITING)
+        self._runs.update_agent_run(
+            waiting_agent,
+            [
+                Event.create(
+                    agent_run.project_id,
+                    EventType.RUN_WAITING,
+                    {"agent_run_id": agent_run.id, "reason": "approval"},
+                    agent_run.run_id,
+                )
+            ],
+        )
+        self._tasks.complete(
+            task.id,
+            [
+                Event.create(
+                    agent_run.project_id,
+                    EventType.TASK_COMPLETED,
+                    {"task_id": task.id, "agent_run_id": agent_run.id, "reason": "approval"},
+                    agent_run.run_id,
+                )
+            ],
+        )
+
+    def complete_waiting_agent_after_approval(
+        self,
+        approval: Approval,
+        *,
+        summary: str,
+        artifact_id: str | None,
+    ) -> None:
+        agent_run = self._runs.get_agent_run(approval.agent_run_id)
+        if agent_run.status == RunStatus.COMPLETED:
+            self._complete_parent_if_ready(approval.project_id, approval.run_id)
+            return
+        if agent_run.status == RunStatus.FAILED:
+            return
+        result_artifact = self._put_agent_result(agent_run, summary)
+        finished_agent = agent_run.transition(RunStatus.COMPLETED, result_artifact.id)
+        events = [
+            Event.create(
+                approval.project_id,
+                EventType.RUN_COMPLETED,
+                {
+                    "agent_run_id": agent_run.id,
+                    "artifact_id": result_artifact.id,
+                    "approval_id": approval.id,
+                },
+                approval.run_id,
+            )
+        ]
+        self._runs.update_agent_run(finished_agent, events)
+        self._append_conversation(
+            finished_agent,
+            ConversationRole.ASSISTANT,
+            finished_agent.definition.name,
+            summary,
+            artifact_id or result_artifact.id,
+        )
+        self._complete_parent_if_ready(approval.project_id, approval.run_id)
 
     def _put_tool_artifact(
         self,
@@ -745,6 +937,25 @@ def _safe_tool_input(request: ToolRequest) -> dict[str, object]:
             continue
         result[key] = value
     return result
+
+
+def _tool_request_without_content(request: ToolRequest) -> dict[str, object]:
+    sanitized = dict(request.input)
+    if "content" in sanitized:
+        value = sanitized.pop("content")
+        if isinstance(value, str):
+            sanitized["content_bytes"] = len(value.encode("utf-8"))
+        else:
+            sanitized["content_present"] = True
+    return {"name": request.name, "input": sanitized}
+
+
+def _first_pending_approval(tool_results: Sequence[dict[str, object]]) -> str | None:
+    for result in tool_results:
+        approval_id = result.get("approval_id")
+        if result.get("approval_status") == ApprovalStatus.PENDING.value and isinstance(approval_id, str):
+            return approval_id
+    return None
 
 
 def _is_project_orchestrator_entry(entry: ConversationEntry) -> bool:

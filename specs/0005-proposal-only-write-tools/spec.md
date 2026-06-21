@@ -23,9 +23,18 @@ approval/apply flows.
 ## Non-Goals
 
 - Applying changes.
-- Shell, git, browser, network, or external service tools.
+- Arbitrary shell, git, browser, network, or external service tools.
 - Sandbox isolation.
 - Multi-file patch application.
+
+## 2026-06-21 Extension
+
+By operator request, this slice now includes a bounded
+`workspace.run_shell_command` tool for child agents. It is exposed through the
+same `ToolBroker` and `ToolPolicy` ports, runs only inside the project
+workspace, strips secret-bearing environment variables, caps timeout, and denies
+obvious destructive, network, install, and secret-path commands. Risky command
+approval remains out of scope and is tracked separately.
 
 ## Acceptance
 
@@ -38,4 +47,6 @@ approval/apply flows.
   work view and can approve or reject them through the API.
 - Project and subagent conversations are rendered from durable transcript
   entries rather than reconstructed from only the selected run.
+- Child agents can run bounded workspace commands through policy-checked shell
+  execution without inheriting raw secrets.
 - Frontend build succeeds against the API contract.

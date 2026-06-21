@@ -425,8 +425,7 @@ class LocalFileStoreTests(unittest.TestCase):
                     '"input":{"path":"README.md","content":"After\\n"}}'
                     "]} "
                 ),
-                '{"action":"final","content":"Proposed README update; not applied."}',
-                "Summary includes proposed diff.",
+                "Summary includes applied README change.",
             ]
         )
         worker = WorkerService(
@@ -449,7 +448,11 @@ class LocalFileStoreTests(unittest.TestCase):
         finished_state = projects.get_run_state(project.id, run_state.run.id)
         artifact_text = "\n".join(finished_state.artifact_contents.values())
 
-        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertEqual("waiting", finished_state.run.status.value)
+        child_statuses = {
+            agent.definition.name: agent.status.value for agent in finished_state.agent_runs
+        }
+        self.assertEqual("waiting", child_statuses["implementer"])
         self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
         self.assertEqual(1, len(finished_state.approvals))
         self.assertEqual("pending", finished_state.approvals[0].status.value)
@@ -464,11 +467,13 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             tool_broker=LocalWorkspaceToolBroker(),
             conversations=store,
+            worker=worker,
         )
         applied = approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
         after_approval_state = projects.get_run_state(project.id, run_state.run.id)
 
         self.assertEqual("applied", applied.status.value)
+        self.assertEqual("completed", after_approval_state.run.status.value)
         self.assertEqual("After\n", readme.read_text(encoding="utf-8"))
         self.assertEqual("applied", after_approval_state.approvals[0].status.value)
         self.assertIn(
@@ -514,7 +519,6 @@ class LocalFileStoreTests(unittest.TestCase):
                     '"input":{"path":"README.md","content":"Before\\nAfter\\n"}}'
                     "]} "
                 ),
-                '{"action":"final","content":"Read README and proposed an additive update."}',
                 "Summary includes the proposed README change.",
             ]
         )
@@ -539,13 +543,13 @@ class LocalFileStoreTests(unittest.TestCase):
         artifact_text = "\n".join(finished_state.artifact_contents.values())
         event_types = [event.type.value for event in finished_state.events]
 
-        self.assertEqual("completed", finished_state.run.status.value)
+        self.assertEqual("waiting", finished_state.run.status.value)
         self.assertEqual("Before\n", readme.read_text(encoding="utf-8"))
         self.assertEqual(1, len(finished_state.approvals))
         self.assertGreaterEqual(event_types.count("tool.completed"), 2)
         self.assertIn("Before", artifact_text)
         self.assertIn("+After", artifact_text)
-        self.assertIn("Read README and proposed an additive update.", artifact_text)
+        self.assertIn("Waiting for approval", "\n".join(entry.title for entry in finished_state.conversation_entries))
 
         approvals = ApprovalService(
             runs=store,
@@ -553,6 +557,7 @@ class LocalFileStoreTests(unittest.TestCase):
             artifacts=store,
             tool_broker=LocalWorkspaceToolBroker(),
             conversations=store,
+            worker=worker,
         )
         approvals.approve(project.id, run_state.run.id, finished_state.approvals[0].id)
         self.assertEqual("Before\nAfter\n", readme.read_text(encoding="utf-8"))

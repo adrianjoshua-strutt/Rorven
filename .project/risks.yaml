@@ -79,3 +79,7 @@ risks:
     title: Subagent work appears detached from the main project conversation
     severity: high
     mitigation: expose project-level agent runs and render subagent start and finish entries inside the timestamped project chat timeline
+  - id: R-021
+    title: Bounded shell commands exceed policy intent
+    severity: high
+    mitigation: keep shell execution behind ToolPolicy and ToolBroker, strip secret-bearing environment variables, deny destructive/network/install patterns, and add explicit command approval policy before allowing risky commands

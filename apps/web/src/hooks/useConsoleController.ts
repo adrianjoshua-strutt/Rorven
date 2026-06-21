@@ -12,6 +12,7 @@ import {
   listProjects,
   rejectApproval,
   submitRun,
+  updateApprovalPolicy,
   updateProjectDefaults,
 } from "../api";
 import {
@@ -224,6 +225,20 @@ export function useConsoleController() {
     }
   }
 
+  async function handleUpdateApprovalPolicy(textFileWrite: string) {
+    setSettingsLoadState("loading");
+    setError(null);
+    try {
+      setSettingsSnapshot(
+        await updateApprovalPolicy({ text_file_write: textFileWrite }),
+      );
+      setSettingsLoadState("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update approval policy");
+      setSettingsLoadState("error");
+    }
+  }
+
   async function handleApprovalDecision(approval: ApprovalRecord, decision: "approve" | "reject") {
     setError(null);
     try {
@@ -332,6 +347,7 @@ export function useConsoleController() {
     handleSubmitRootMessage,
     handleUpdateWorkspaceBaseRoot,
     handleApprovalDecision,
+    handleUpdateApprovalPolicy,
     rootIsPending: rootProject.isPending,
     inspectActivity,
     inspectProjectAgent,

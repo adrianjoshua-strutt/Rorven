@@ -48,6 +48,7 @@ class ApiSettingsTests(unittest.TestCase):
         )
         self.assertTrue(all(profile["model_id"] for profile in payload["model_profiles"]))
         self.assertNotIn("provider-default", {profile["model_id"] for profile in payload["model_profiles"]})
+        self.assertEqual("ask_each_time", payload["policy"]["text_file_write_approval"])
 
     def test_model_profile_ids_are_persisted_in_state(self) -> None:
         data_dir = Path("test-output") / "tests" / f"settings-models-{uuid4()}"
@@ -108,6 +109,33 @@ class ApiSettingsTests(unittest.TestCase):
         self.assertEqual(
             str(workspace_base.resolve()),
             payload["project_defaults"]["workspace_base_root"],
+        )
+
+    def test_approval_policy_is_persisted(self) -> None:
+        data_dir = Path("test-output") / "tests" / f"settings-approval-policy-{uuid4()}"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        previous_data_dir = os.environ.get("RORVEN_DATA_DIR")
+        previous_key = os.environ.get("RORVEN_OPENROUTER_API_KEY")
+        self.addCleanup(_restore_env, "RORVEN_DATA_DIR", previous_data_dir)
+        self.addCleanup(_restore_env, "RORVEN_OPENROUTER_API_KEY", previous_key)
+        os.environ["RORVEN_DATA_DIR"] = str(data_dir.resolve())
+        os.environ["RORVEN_OPENROUTER_API_KEY"] = "test-secret-that-must-not-leak"
+
+        module = importlib.import_module("rorven_api.main")
+        client = TestClient(module.create_app())
+
+        update_response = client.post(
+            "/settings/approval-policy",
+            json={"text_file_write": "auto_apply_text_file_writes"},
+        )
+        self.assertEqual(200, update_response.status_code)
+
+        settings_response = client.get("/settings")
+        self.assertEqual(200, settings_response.status_code)
+        payload = settings_response.json()["settings"]
+        self.assertEqual(
+            "auto_apply_text_file_writes",
+            payload["policy"]["text_file_write_approval"],
         )
 
 

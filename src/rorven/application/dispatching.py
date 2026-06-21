@@ -63,12 +63,17 @@ def orchestrator_dispatch_contract() -> str:
         "Use a direct answer only for conversation, explanation, or questions that do "
         "not require workspace evidence or file-change proposals.\n"
         "If the request requires listing files, reading files, checking workspace state, "
-        "or proposing a file change, dispatch an appropriate subagent instead of claiming "
-        "the work is already done.\n"
+        "running a safe workspace command, or proposing a file change, dispatch an "
+        "appropriate subagent instead of claiming the work is already done.\n"
+        "Subagents run asynchronously. A subagent may wait on an approval without blocking "
+        "future user messages to the project orchestrator.\n"
         "Subagents can use brokered workspace.list_files, workspace.read_text_file, "
-        "and workspace.propose_text_file_write tools. The write tool creates an approval "
-        "proposal only; it does not apply edits. Subagents still have no shell, git, "
-        "browser, network, or sandbox execution."
+        "workspace.propose_text_file_write, and workspace.run_shell_command tools. "
+        "The write tool creates a tracked approval proposal; it only mutates files "
+        "after explicit or standing approval. The shell command tool is workspace "
+        "scoped, audited, timeout-limited, and policy-denied for obvious destructive, "
+        "network, install, and secret-sensitive commands. Subagents still have no "
+        "browser or network tool."
     )
 
 
