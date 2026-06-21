@@ -240,7 +240,7 @@ and the sandboxed run failed while cleaning Playwright state with
 
 ## 2026-06-21 root control plane and protocol follow-up evidence
 
-Validated implementation commit: pending commit.
+Validated implementation commit: `d457204`
 
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
