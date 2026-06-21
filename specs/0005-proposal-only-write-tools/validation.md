@@ -200,7 +200,7 @@ Coverage includes:
 
 ## 2026-06-21 agent protocol and project sorting follow-up evidence
 
-Validated implementation commit: pending
+Validated implementation commit: `7d61f3db673ead2236d0df5b877e6355a78fe2cb`
 
 ```powershell
 $env:PYTHONPATH='.;src;apps/api;apps/worker'
